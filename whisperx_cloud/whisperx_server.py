@@ -4,6 +4,9 @@ Deploy whisperX as a standalone service on GPU cloud platforms (Colab, Kaggle, e
 Compatible with VideoLingo project
 """
 
+# Server version
+SERVER_VERSION = "1.1.0"
+
 import os
 # Set matplotlib backend to Agg before importing any matplotlib-dependent libraries
 os.environ['MPLBACKEND'] = 'Agg'
@@ -61,6 +64,7 @@ class TranscriptionResponse(BaseModel):
     processing_time: float
     device: str
     model: str
+    server_version: str = SERVER_VERSION
 
 class HealthResponse(BaseModel):
     status: str
@@ -68,12 +72,18 @@ class HealthResponse(BaseModel):
     cuda_available: bool
     gpu_memory: Optional[float] = None
     models_loaded: list
+    server_version: str = SERVER_VERSION
+    platform: str = "cuda" if torch.cuda.is_available() else "cpu"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize on startup, cleanup on shutdown"""
     global device, compute_type
-    
+
+    # Print server version on startup
+    print(f"📌 WhisperX Cloud Server v{SERVER_VERSION}")
+    print(f"   With PyTorch weights_only patch for PyTorch 2.6+ compatibility\n")
+
     # Detect device
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device == "cuda":
@@ -85,9 +95,9 @@ async def lifespan(app: FastAPI):
     else:
         compute_type = "int8"
         print("⚠️ CUDA not available, using CPU")
-    
+
     yield
-    
+
     # Cleanup
     print("Cleaning up models...")
     model_cache.clear()
@@ -238,7 +248,7 @@ async def transcribe(
             speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in segments if "speaker" in seg))
         
         processing_time = time.time() - start_time
-        
+
         return TranscriptionResponse(
             success=True,
             language=detected_language,
@@ -247,7 +257,8 @@ async def transcribe(
             speakers=speakers,
             processing_time=processing_time,
             device=device,
-            model=model
+            model=model,
+            server_version=SERVER_VERSION
         )
         
     except Exception as e:
