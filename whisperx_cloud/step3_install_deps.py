@@ -298,9 +298,7 @@ def get_mamba_cmd():
 
 
 def create_environment_yml():
-    """创建环境配置文件"""
-    # ⚠️ 关键：将 pip 依赖分离到 post-install 步骤
-    # 避免 conda 的 pip 子进程问题
+    """创建环境配置文件 - 优先使用 Mamba 安装依赖"""
     environment_yml = '''name: whisperx-cloud
 channels:
   - pytorch
@@ -308,54 +306,169 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  # ==================== Python & PyTorch ====================
   - python=3.10
   - pytorch=2.0.0
   - torchaudio=2.0.0
   - pytorch-cuda=11.8
+  
+  # ==================== Audio Processing ====================
   - ffmpeg  # conda-forge 版本支持 NVENC/NVDEC GPU 硬件加速
-  - av  # 通过 conda 安装 PyAV，避免编译
+  - av  # PyAV 通过 conda 安装，避免编译
+  - librosa=0.10.2
+  - soundfile>=0.12.1
+  - numpy=1.26.4
+  
+  # ==================== ML Dependencies ====================
+  # 优先用 mamba 安装，避免 pip 编译
+  - transformers=4.39.3
+  - pandas=2.2.3
   - pip
+  
+  # ==================== Build Tools ====================
+  - git
+  - setuptools
+  - wheel
+  - cython
 '''
     
     with open('environment.yml', 'w') as f:
         f.write(environment_yml)
     
-    logger.success("Created environment.yml (conda deps only)")
+    logger.success("Created environment.yml (Mamba 优先)")
 
 
 def install_whisperx_direct(python_path: str) -> bool:
-    """直接从 GitHub 安装 WhisperX"""
+    """直接从 GitHub 安装 WhisperX（带重试和镜像支持）"""
     logger.progress("安装 WhisperX (从 GitHub 直接安装)...")
     
     whisperx_commit = '7307306a9d8dd0d261e588cc933322454f853853'
-    git_url = f'git+https://github.com/m-bain/whisperx.git@{whisperx_commit}'
+    
+    # 使用多个镜像源尝试
+    git_urls = [
+        # 原始 GitHub
+        f'git+https://github.com/m-bain/whisperx.git@{whisperx_commit}',
+        # GitHub 代理镜像
+        f'git+https://ghp.ci/https://github.com/m-bain/whisperx.git@{whisperx_commit}',
+        f'git+https://ghproxy.com/https://github.com/m-bain/whisperx.git@{whisperx_commit}',
+        f'git+https://mirror.ghproxy.com/https://github.com/m-bain/whisperx.git@{whisperx_commit}',
+    ]
+    
+    # 先升级 pip 和构建工具
+    logger.info("升级 pip 和构建工具...")
+    subprocess.run(
+        [python_path, '-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel', 'Cython'],
+        capture_output=True, timeout=60
+    )
+    
+    for git_url in git_urls:
+        logger.info(f"尝试: {git_url[:60]}...")
+        try:
+            result = subprocess.run(
+                [python_path, '-m', 'pip', 'install', '--no-cache-dir', git_url],
+                capture_output=True, text=True, timeout=600
+            )
+            if result.returncode == 0:
+                logger.success("WhisperX 安装成功!")
+                return True
+            else:
+                logger.warning(f"该源失败，尝试下一个...")
+                logger.debug(f"错误: {result.stderr[:300]}")
+        except subprocess.TimeoutExpired:
+            logger.warning("安装超时，尝试下一个源...")
+        except Exception as e:
+            logger.warning(f"安装异常: {e}")
+    
+    logger.error("所有 GitHub 源都失败")
+    return False
+
+
+def install_whisperx_from_clone(python_path: str) -> bool:
+    """备用方案：先克隆到本地再安装"""
+    logger.progress("尝试本地克隆安装...")
+    
+    import tempfile
+    import shutil
+    
+    whisperx_commit = '7307306a9d8dd0d261e588cc933322454f853853'
+    clone_urls = [
+        'https://github.com/m-bain/whisperx.git',
+        'https://ghp.ci/https://github.com/m-bain/whisperx.git',
+        'https://ghproxy.com/https://github.com/m-bain/whisperx.git',
+    ]
+    
+    temp_dir = tempfile.mkdtemp(prefix='whisperx_clone_')
     
     try:
+        # 尝试克隆
+        cloned = False
+        for url in clone_urls:
+            logger.info(f"克隆: {url}")
+            result = subprocess.run(
+                ['git', 'clone', '--depth', '1', url, temp_dir],
+                capture_output=True, text=True, timeout=120
+            )
+            if result.returncode == 0:
+                cloned = True
+                logger.success("克隆成功")
+                break
+            else:
+                logger.warning(f"克隆失败，尝试下一个...")
+        
+        if not cloned:
+            logger.error("所有克隆源都失败")
+            return False
+        
+        # 切换到指定 commit
+        subprocess.run(
+            ['git', '-C', temp_dir, 'fetch', '--depth', '1', 'origin', whisperx_commit],
+            capture_output=True, timeout=60
+        )
+        subprocess.run(
+            ['git', '-C', temp_dir, 'checkout', whisperx_commit],
+            capture_output=True, timeout=30
+        )
+        
+        # 本地安装
+        logger.info("本地安装...")
         result = subprocess.run(
-            [python_path, '-m', 'pip', 'install', '--no-cache-dir', git_url],
+            [python_path, '-m', 'pip', 'install', '--no-cache-dir', temp_dir],
             capture_output=True, text=True, timeout=600
         )
+        
         if result.returncode == 0:
-            logger.success("WhisperX 安装成功!")
+            logger.success("WhisperX 本地安装成功!")
             return True
         else:
-            logger.error(f"安装失败: {result.stderr[:500]}")
+            logger.error(f"本地安装失败: {result.stderr[:500]}")
             return False
-    except subprocess.TimeoutExpired:
-        logger.error("安装超时")
-        return False
+            
     except Exception as e:
-        logger.error(f"安装异常: {e}")
+        logger.error(f"本地安装异常: {e}")
         return False
+    finally:
+        # 清理临时目录
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def install_pip_dependencies(env_prefix: str) -> bool:
-    """单独安装 pip 依赖（解决 conda pip 子进程问题）"""
-    logger.progress("安装 pip 依赖...")
+    """在 Mamba 创建的 Conda 环境中安装 pip 依赖"""
+    logger.progress("在 Conda 环境中安装 pip 依赖...")
     
     python_path = f"{env_prefix}/bin/python"
     
-    # 基础依赖（WhisperX 除外）
+    # 验证使用的是 conda 环境的 pip
+    result = subprocess.run([python_path, '-c', 'import sys; print(sys.executable)'], 
+                          capture_output=True, text=True)
+    logger.info(f"使用 Python: {result.stdout.strip()}")
+    
+    # 升级环境中的 pip
+    logger.info("升级环境中的 pip...")
+    subprocess.run([python_path, '-m', 'pip', 'install', '--upgrade', 'pip'], 
+                  capture_output=True, timeout=60)
+    
+    # API 框架依赖（这些没有 conda 包或版本太旧）
     pip_packages = [
         "fastapi==0.109.0",
         "uvicorn[standard]==0.27.0",
@@ -366,52 +479,39 @@ def install_pip_dependencies(env_prefix: str) -> bool:
     ]
     
     for package in pip_packages:
-        logger.info(f"安装: {package}")
+        logger.info(f"pip 安装: {package}")
         try:
             result = subprocess.run(
                 [python_path, '-m', 'pip', 'install', '--no-cache-dir', package],
-                capture_output=True,
-                text=True,
-                timeout=300
+                capture_output=True, text=True, timeout=300
             )
-            
             if result.returncode != 0:
-                logger.error(f"安装失败: {package}")
-                logger.error(f"错误输出: {result.stderr}")
-                return False
-            
-            logger.success(f"安装成功: {package}")
-            
-        except subprocess.TimeoutExpired:
-            logger.error(f"安装超时: {package}")
-            return False
+                logger.warning(f"pip 安装失败: {package}，但继续...")
+            else:
+                logger.success(f"pip 安装成功: {package}")
         except Exception as e:
-            logger.error(f"安装异常: {package} - {e}")
-            return False
+            logger.warning(f"pip 安装异常: {package} - {e}")
     
-    # 安装 WhisperX
-    logger.info("安装 WhisperX...")
-    
-    # 先安装 WhisperX 的依赖（避免从 git 构建时缺少依赖）
+    # 安装 WhisperX 特有的依赖（不能用 Mamba 安装的）
+    logger.info("安装 WhisperX 特有依赖...")
     whisperx_deps = [
-        "numpy==1.26.4",
         "faster-whisper==1.0.0",
         "ctranslate2==4.4.0",
-        "transformers==4.39.3",
-        "librosa==0.10.2.post1",
-        "soundfile>=0.12.1",
-        "pandas==2.2.3",
     ]
     
     for dep in whisperx_deps:
-        logger.info(f"预装依赖: {dep}")
-        subprocess.run(
-            [python_path, '-m', 'pip', 'install', '--no-cache-dir', dep],
-            capture_output=True, timeout=180
-        )
+        logger.info(f"pip 安装: {dep}")
+        subprocess.run([python_path, '-m', 'pip', 'install', '--no-cache-dir', dep],
+                      capture_output=True, timeout=180)
     
-    # 直接从 GitHub 安装 WhisperX
-    return install_whisperx_direct(python_path)
+    # 在 Conda 环境中从 GitHub 安装 WhisperX
+    logger.section("在 Conda 环境中安装 WhisperX")
+    if install_whisperx_direct(python_path):
+        return True
+    
+    # 失败后尝试本地克隆安装
+    logger.warning("直接安装失败，尝试备用方案...")
+    return install_whisperx_from_clone(python_path)
 
 
 def verify_environment(env_prefix: str) -> bool:
