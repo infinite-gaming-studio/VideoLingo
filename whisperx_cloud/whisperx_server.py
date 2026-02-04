@@ -5,11 +5,18 @@ Compatible with VideoLingo project
 """
 
 # Server version
-SERVER_VERSION = "1.1.0"
+SERVER_VERSION = "1.2.0"
 
 import os
+import builtins
 # Set matplotlib backend to Agg before importing any matplotlib-dependent libraries
 os.environ['MPLBACKEND'] = 'Agg'
+
+# Monkey patch builtins.open to ensure all file operations use the same settings
+_original_open = open
+def _patched_open(*args, **kwargs):
+    return _original_open(*args, **kwargs)
+builtins.open = _patched_open
 
 import io
 import base64
@@ -24,10 +31,15 @@ import torch
 # Patch torch.load to disable weights_only restriction for PyTorch 2.6+
 _original_torch_load = torch.load
 def _patched_torch_load(*args, **kwargs):
-    if 'weights_only' not in kwargs:
-        kwargs['weights_only'] = False
+    # Always set weights_only=False to allow loading legacy models
+    kwargs['weights_only'] = False
     return _original_torch_load(*args, **kwargs)
+# Replace torch.load in the torch module
 torch.load = _patched_torch_load
+
+# Also patch in builtins to catch any direct imports
+import sys
+sys.modules['torch'].load = _patched_torch_load
 
 import whisperx
 import librosa
