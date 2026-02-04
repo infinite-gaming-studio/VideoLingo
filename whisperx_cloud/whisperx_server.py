@@ -17,6 +17,15 @@ from typing import Optional
 from contextlib import asynccontextmanager
 
 import torch
+
+# Patch torch.load to disable weights_only restriction for PyTorch 2.6+
+_original_torch_load = torch.load
+def _patched_torch_load(*args, **kwargs):
+    if 'weights_only' not in kwargs:
+        kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+torch.load = _patched_torch_load
+
 import whisperx
 import librosa
 import numpy as np
