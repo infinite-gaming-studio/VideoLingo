@@ -323,164 +323,30 @@ dependencies:
     logger.success("Created environment.yml (conda deps only)")
 
 
-def get_cdn_git_urls(repo_url: str, commit: str) -> list:
-    """获取 GitHub 仓库的 CDN 加速 URL 列表（用于 pip install）"""
-    # 提取仓库路径
-    # 从 git+https://github.com/user/repo.git 提取 user/repo
-    if 'github.com' in repo_url:
-        parts = repo_url.replace('git+', '').replace('https://', '').replace('.git', '').split('/')
-        if len(parts) >= 3:
-            user, repo = parts[1], parts[2]
-        else:
-            return [repo_url]
-    else:
-        return [repo_url]
-    
-    # 国际 CDN 加速列表
-    cdn_urls = [
-        # 用户自定义（最高优先级）
-        os.environ.get('WHISPERX_GIT_URL', ''),
-        
-        # 国际 CDN / 代理（按可靠性排序）
-        f'git+https://ghps.cc/https://github.com/{user}/{repo}.git@{commit}',  # GitHub 代理
-        f'git+https://ghproxy.net/https://github.com/{user}/{repo}.git@{commit}',  # GitHub 代理
-        f'git+https://github.moeyy.xyz/https://github.com/{user}/{repo}.git@{commit}',  # 香港节点
-        f'git+https://gh.api.99988866.xyz/https://github.com/{user}/{repo}.git@{commit}',  # 美国节点
-        
-        # 原始地址（保底）
-        f'git+https://github.com/{user}/{repo}.git@{commit}',
-    ]
-    
-    # 过滤空值和重复
-    seen = set()
-    unique_urls = []
-    for url in cdn_urls:
-        if url and url not in seen:
-            seen.add(url)
-            unique_urls.append(url)
-    
-    return unique_urls
-
-
-def get_whisperx_wheel_url() -> list:
-    """获取预编译 WhisperX wheel 的 URL 列表"""
-    # 预编译 wheel 仓库配置
-    # 用户可以设置环境变量指向自己的 CDN
-    wheel_sources = [
-        os.environ.get('WHISPERX_WHEEL_URL', ''),  # 用户自定义
-        # 预编译 wheel CDN（如有人构建并发布）
-        'https://github.com/user-attachments/files/whisperx-3.1.1-py3-none-any.whl',
-    ]
-    
-    # 过滤空值
-    return [url for url in wheel_sources if url]
-
-
-def build_whisperx_wheel(python_path: str, output_dir: str = './wheels') -> str:
-    """本地预编译 WhisperX wheel"""
-    logger.progress("本地预编译 WhisperX wheel...")
-    
-    os.makedirs(output_dir, exist_ok=True)
-    
-    try:
-        # 安装 wheel 构建工具
-        subprocess.run(
-            [python_path, '-m', 'pip', 'install', 'wheel', 'build'],
-            capture_output=True, timeout=60
-        )
-        
-        # 克隆并构建 wheel
-        whisperx_commit = '7307306a9d8dd0d261e588cc933322454f853853'
-        
-        # 使用 pip wheel 直接构建
-        result = subprocess.run(
-            [python_path, '-m', 'pip', 'wheel', 
-             f'git+https://github.com/m-bain/whisperx.git@{whisperx_commit}',
-             '--no-cache-dir', '-w', output_dir],
-            capture_output=True, text=True, timeout=600
-        )
-        
-        if result.returncode == 0:
-            # 查找生成的 wheel 文件
-            wheels = [f for f in os.listdir(output_dir) if f.startswith('whisperx') and f.endswith('.whl')]
-            if wheels:
-                wheel_path = os.path.join(output_dir, wheels[0])
-                logger.success(f"Wheel 构建成功: {wheel_path}")
-                return wheel_path
-        
-        logger.warning(f"Wheel 构建失败，将使用直接安装: {result.stderr}")
-        return ''
-        
-    except Exception as e:
-        logger.warning(f"Wheel 构建异常: {e}")
-        return ''
-
-
-def install_whisperx_from_wheel(python_path: str) -> bool:
-    """尝试从预编译 wheel 或 CDN 加速的 git 安装 WhisperX"""
-    logger.progress("尝试安装 WhisperX (使用 CDN 加速)...")
+def install_whisperx_direct(python_path: str) -> bool:
+    """直接从 GitHub 安装 WhisperX"""
+    logger.progress("安装 WhisperX (从 GitHub 直接安装)...")
     
     whisperx_commit = '7307306a9d8dd0d261e588cc933322454f853853'
+    git_url = f'git+https://github.com/m-bain/whisperx.git@{whisperx_commit}'
     
-    # 方法1: 尝试从预编译 wheel URL 安装
-    wheel_urls = get_whisperx_wheel_url()
-    for url in wheel_urls:
-        if not url:
-            continue
-        logger.info(f"尝试从 wheel 安装: {url[:60]}...")
-        try:
-            result = subprocess.run(
-                [python_path, '-m', 'pip', 'install', '--no-cache-dir', url],
-                capture_output=True, text=True, timeout=300
-            )
-            if result.returncode == 0:
-                logger.success("WhisperX wheel 安装成功!")
-                return True
-        except Exception as e:
-            logger.warning(f"Wheel 安装失败: {e}")
-    
-    # 方法2: 使用 CDN 加速的 git 安装
-    logger.info("尝试使用 CDN 加速从 git 安装...")
-    cdn_git_urls = get_cdn_git_urls(
-        'git+https://github.com/m-bain/whisperx.git',
-        whisperx_commit
-    )
-    
-    for i, url in enumerate(cdn_git_urls):
-        cdn_name = url.split('/')[2] if '/' in url else 'unknown'
-        logger.info(f"尝试 CDN {i+1}/{len(cdn_git_urls)} ({cdn_name})...")
-        try:
-            result = subprocess.run(
-                [python_path, '-m', 'pip', 'install', '--no-cache-dir', url],
-                capture_output=True, text=True, timeout=600
-            )
-            if result.returncode == 0:
-                logger.success(f"WhisperX CDN 安装成功! (via {cdn_name})")
-                return True
-            else:
-                logger.warning(f"CDN {cdn_name} 失败，尝试下一个...")
-        except subprocess.TimeoutExpired:
-            logger.warning(f"CDN {cdn_name} 超时，尝试下一个...")
-        except Exception as e:
-            logger.warning(f"CDN {cdn_name} 错误: {e}")
-    
-    # 方法3: 本地构建 wheel
-    logger.info("尝试本地构建 wheel...")
-    wheel_path = build_whisperx_wheel(python_path)
-    if wheel_path and os.path.exists(wheel_path):
-        try:
-            result = subprocess.run(
-                [python_path, '-m', 'pip', 'install', '--no-cache-dir', wheel_path],
-                capture_output=True, text=True, timeout=180
-            )
-            if result.returncode == 0:
-                logger.success("WhisperX 本地 wheel 安装成功!")
-                return True
-        except Exception as e:
-            logger.warning(f"本地 wheel 安装失败: {e}")
-    
-    logger.error("所有安装方式均失败")
-    return False
+    try:
+        result = subprocess.run(
+            [python_path, '-m', 'pip', 'install', '--no-cache-dir', git_url],
+            capture_output=True, text=True, timeout=600
+        )
+        if result.returncode == 0:
+            logger.success("WhisperX 安装成功!")
+            return True
+        else:
+            logger.error(f"安装失败: {result.stderr[:500]}")
+            return False
+    except subprocess.TimeoutExpired:
+        logger.error("安装超时")
+        return False
+    except Exception as e:
+        logger.error(f"安装异常: {e}")
+        return False
 
 
 def install_pip_dependencies(env_prefix: str) -> bool:
@@ -523,8 +389,8 @@ def install_pip_dependencies(env_prefix: str) -> bool:
             logger.error(f"安装异常: {package} - {e}")
             return False
     
-    # 安装 WhisperX（使用预编译 wheel 优先）
-    logger.info("安装 WhisperX (优先使用预编译 wheel)...")
+    # 安装 WhisperX
+    logger.info("安装 WhisperX...")
     
     # 先安装 WhisperX 的依赖（避免从 git 构建时缺少依赖）
     whisperx_deps = [
@@ -544,102 +410,8 @@ def install_pip_dependencies(env_prefix: str) -> bool:
             capture_output=True, timeout=180
         )
     
-    # 尝试预编译 wheel 安装
-    if install_whisperx_from_wheel(python_path):
-        return True
-    
-    # 使用 CDN 加速安装
-    logger.info("从 git 安装 WhisperX (使用 CDN 加速)...")
-    whisperx_commit = '7307306a9d8dd0d261e588cc933322454f853853'
-    cdn_git_urls = get_cdn_git_urls(
-        'git+https://github.com/m-bain/whisperx.git',
-        whisperx_commit
-    )
-    
-    for i, url in enumerate(cdn_git_urls):
-        cdn_name = url.split('/')[2] if '/' in url else f'cdn_{i}'
-        logger.info(f"尝试安装 via {cdn_name}...")
-        try:
-            result = subprocess.run(
-                [python_path, '-m', 'pip', 'install', '--no-cache-dir', url],
-                capture_output=True, text=True, timeout=600
-            )
-            
-            if result.returncode == 0:
-                logger.success(f"WhisperX 安装成功! (via {cdn_name})")
-                return True
-            else:
-                logger.warning(f"{cdn_name} 失败: {result.stderr[:200]}")
-                
-        except subprocess.TimeoutExpired:
-            logger.warning(f"{cdn_name} 超时")
-        except Exception as e:
-            logger.warning(f"{cdn_name} 异常: {e}")
-    
-    logger.error("所有 CDN 安装方式均失败")
-    return install_whisperx_with_deps(python_path)
-
-
-def install_whisperx_with_deps(python_path: str) -> bool:
-    """尝试预装 WhisperX 依赖后再安装（使用 CDN 加速）"""
-    logger.info("预装 WhisperX 依赖...")
-    
-    # 注意：av 已通过 conda 安装，不需要 pip 安装
-    pre_deps = [
-        "numpy==1.26.4",
-        # "av==10.0.0",  # ← 跳过，conda 已安装
-        "faster-whisper==1.0.0",
-        "ctranslate2==4.4.0",
-        "transformers==4.39.3",
-        "librosa==0.10.2.post1",
-        "soundfile>=0.12.1",
-        "pandas==2.2.3",
-    ]
-    
-    for dep in pre_deps:
-        logger.info(f"预装: {dep}")
-        result = subprocess.run(
-            [python_path, '-m', 'pip', 'install', dep],
-            capture_output=True,
-            text=True,
-            timeout=180
-        )
-        if result.returncode != 0:
-            logger.warning(f"预装跳过: {dep}")
-    
-    # 最后尝试安装 WhisperX（使用 CDN 加速）
-    logger.info("尝试安装 WhisperX (使用 CDN 加速)...")
-    whisperx_commit = '7307306a9d8dd0d261e588cc933322454f853853'
-    cdn_git_urls = get_cdn_git_urls(
-        'git+https://github.com/m-bain/whisperx.git',
-        whisperx_commit
-    )
-    
-    for i, url in enumerate(cdn_git_urls):
-        cdn_name = url.split('/')[2] if '/' in url else f'cdn_{i}'
-        logger.info(f"尝试安装 via {cdn_name}...")
-        try:
-            result = subprocess.run(
-                [python_path, '-m', 'pip', 'install', 
-                 url],
-                capture_output=True,
-                text=True,
-                timeout=300
-            )
-            
-            if result.returncode == 0:
-                logger.success(f"WhisperX 安装成功! (via {cdn_name})")
-                return True
-            else:
-                logger.warning(f"{cdn_name} 失败: {result.stderr[:200]}")
-                
-        except subprocess.TimeoutExpired:
-            logger.warning(f"{cdn_name} 超时")
-        except Exception as e:
-            logger.warning(f"{cdn_name} 异常: {e}")
-    
-    logger.error("WhisperX 安装失败")
-    return False
+    # 直接从 GitHub 安装 WhisperX
+    return install_whisperx_direct(python_path)
 
 
 def verify_environment(env_prefix: str) -> bool:
