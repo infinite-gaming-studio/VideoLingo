@@ -39,18 +39,29 @@ def check_hf_mirror():
 def transcribe_audio(raw_audio_file, vocal_audio_file, start, end):
     os.environ['HF_ENDPOINT'] = check_hf_mirror()
     WHISPER_LANGUAGE = load_key("whisper.language")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    rprint(f"🚀 Starting WhisperX using device: {device} ...")
     
-    if device == "cuda":
+    # 智能设备检测: CUDA -> MPS (Apple Silicon) -> CPU
+    if torch.cuda.is_available():
+        device = "cuda"
         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         batch_size = 16 if gpu_mem > 8 else 2
         compute_type = "float16" if torch.cuda.is_bf16_supported() else "int8"
-        rprint(f"[cyan]🎮 GPU memory:[/cyan] {gpu_mem:.2f} GB, [cyan]📦 Batch size:[/cyan] {batch_size}, [cyan]⚙️ Compute type:[/cyan] {compute_type}")
+        rprint(f"[green]🎮 Using CUDA GPU:[/green] {torch.cuda.get_device_name(0)}")
+        rprint(f"[cyan]💾 GPU memory:[/cyan] {gpu_mem:.2f} GB, [cyan]📦 Batch size:[/cyan] {batch_size}, [cyan]⚙️ Compute type:[/cyan] {compute_type}")
+    elif torch.backends.mps.is_available():
+        device = "mps"
+        batch_size = 4  # MPS建议使用较小的batch_size
+        compute_type = "float16"
+        rprint(f"[green]🍎 Using Apple Silicon MPS[/green]")
+        rprint(f"[cyan]📦 Batch size:[/cyan] {batch_size}, [cyan]⚙️ Compute type:[/cyan] {compute_type}")
     else:
+        device = "cpu"
         batch_size = 1
         compute_type = "int8"
+        rprint(f"[yellow]💻 Using CPU (no GPU detected)[/yellow]")
         rprint(f"[cyan]📦 Batch size:[/cyan] {batch_size}, [cyan]⚙️ Compute type:[/cyan] {compute_type}")
+    
+    rprint(f"🚀 Starting WhisperX using device: {device} ...")
     rprint(f"[green]▶️ Starting WhisperX for segment {start:.2f}s to {end:.2f}s...[/green]")
     
     if WHISPER_LANGUAGE == 'zh':
@@ -89,7 +100,8 @@ def transcribe_audio(raw_audio_file, vocal_audio_file, start, end):
 
     # Free GPU resources
     del model
-    torch.cuda.empty_cache()
+    if device == "cuda":
+        torch.cuda.empty_cache()
 
     # Save language
     update_key("whisper.language", result['language'])
@@ -107,7 +119,8 @@ def transcribe_audio(raw_audio_file, vocal_audio_file, start, end):
     rprint(f"[cyan]⏱️ time align:[/cyan] {align_time:.2f}s")
 
     # Free GPU resources again
-    torch.cuda.empty_cache()
+    if device == "cuda":
+        torch.cuda.empty_cache()
     del model_a
 
     # Adjust timestamps

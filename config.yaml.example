@@ -1,0 +1,96 @@
+# VideoLingo 配置文件 (Apple Silicon / ARM64 优化版本)
+# 此配置专为 Apple Silicon Mac 的 Docker 部署优化
+
+# ==================== 基础配置 ====================
+
+# 界面语言
+display_language: "zh-CN"
+
+# 目标翻译语言
+target_language: '简体中文'
+
+# ==================== API 配置 ====================
+# ⚠️ 重要: 请替换为你的实际 API 密钥
+api:
+  key: 'your-api-key-here'
+  base_url: 'https://api.openai.com/v1'
+  model: 'gpt-4'
+
+# ==================== WhisperX 配置 ====================
+whisper:
+  # 模型选项: tiny, base, small, medium, large-v1, large-v2, large-v3
+  # Apple Silicon 建议使用 medium 或 large-v3 (large-v3 更慢但更准)
+  model: 'large-v3'
+  
+  # 语言: zh (中文), en (英文), ja (日文), auto (自动检测)
+  language: 'zh'
+  
+  # 运行模式:
+  # - local: 本地运行 (CPU模式, 较慢)
+  # - cloud: 使用 WhisperX 云端服务 (推荐, 如果启用了 whisperx-cloud 服务)
+  # - elevenlabs: 使用 ElevenLabs API
+  runtime: 'local'
+  
+  # WhisperX 云端服务 URL (仅在 runtime: cloud 时使用)
+  # 如果使用 docker-compose 启动的本地服务, 请设置为: http://whisperx-cloud:8000
+  whisperX_cloud_url: 'http://whisperx-cloud:8000'
+
+# ==================== 人声分离配置 ====================
+# Demucs 人声分离 (分离人声和背景音乐)
+# Apple Silicon 上 CPU 模式较慢, 如果不需要可设为 false
+demucs: true
+
+# ==================== 字幕配置 ====================
+# 是否烧录字幕到视频
+burn_subtitles: true
+
+# FFmpeg GPU 加速
+# ⚠️ 在 Apple Silicon Docker 中必须设为 false
+ffmpeg_gpu: false
+
+# ==================== TTS 配置 ====================
+# TTS 方法选项:
+# - azure_tts: 微软 Azure TTS (推荐, 需要API密钥)
+# - openai_tts: OpenAI TTS (需要API密钥)
+# - edge_tts: 微软 Edge TTS (免费, 推荐)
+# - fish_tts: Fish TTS
+# - gpt_sovits_tts: GPT-SoVITS (需要本地部署)
+# - custom_tts: 自定义TTS
+tts_method: 'edge_tts'
+
+# ==================== 模型目录配置 ====================
+# 模型缓存目录 (Docker 容器中路径)
+model_dir: '/app/models'
+
+# ==================== 性能优化配置 ====================
+# 批处理大小 (Docker CPU 模式建议保持较小)
+batch_size: 1
+
+# 计算类型 (Docker CPU 模式必须使用 int8)
+compute_type: 'int8'
+
+# ==================== 其他配置 ====================
+# 字幕样式 (可选)
+subtitle_style:
+  font: 'Noto Sans CJK SC'
+  font_size: 24
+  color: 'white'
+  outline_color: 'black'
+  outline_width: 2
+  alignment: 'center'
+
+# 视频输出分辨率 (可选, 默认保持原分辨率)
+output_resolution: null
+
+# 音频质量 (可选)
+audio_quality: 'high'
+
+# ==================== 高级配置 (一般不需要修改) ====================
+# 临时文件目录
+temp_dir: '/app/temp'
+
+# 日志级别: DEBUG, INFO, WARNING, ERROR
+log_level: 'INFO'
+
+# 是否启用调试模式
+debug: false

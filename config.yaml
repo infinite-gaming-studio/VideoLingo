@@ -31,7 +31,12 @@ whisper:
   language: 'en'
   detected_language: 'en'
   # Whisper running mode ["local", "cloud", "elevenlabs"]. Specifies where to run, cloud uses 302.ai API
-  runtime: 'local'
+  
+  # runtime: 'local'
+  
+  runtime: 'cloud'
+  whisperX_cloud_url: 'https://adiaphoristic-zaire-reminiscently.ngrok-free.dev'
+
   # 302.ai API key
   whisperX_302_api_key: 'your_302_api_key'
   # ElevenLabs API key (experimental)
