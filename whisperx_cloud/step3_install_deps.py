@@ -230,12 +230,11 @@ def setup_environment_paths(server_env):
 
 
 def get_mamba_cmd():
-    """获取或安装 mamba (优先) 或 conda"""
-    # 检查现有 mamba (优先)
+    """获取或安装 mamba"""
+    # 检查现有 mamba
     mamba_paths = [
         'mamba',
         os.path.expanduser('~/miniforge3/bin/mamba'),
-        os.path.expanduser('~/miniconda3/bin/mamba'),
         os.path.expanduser('~/mambaforge/bin/mamba'),
     ]
     for cmd in mamba_paths:
@@ -243,26 +242,11 @@ def get_mamba_cmd():
             result = subprocess.run([cmd, '--version'], capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
                 logger.success(f"发现 Mamba: {result.stdout.strip()}")
-                return cmd, 'mamba'
+                return cmd
         except:
             pass
     
-    # 检查现有 conda (备选)
-    conda_paths = [
-        'conda',
-        os.path.expanduser('~/miniconda3/bin/conda'),
-        os.path.expanduser('~/anaconda3/bin/conda'),
-    ]
-    for cmd in conda_paths:
-        try:
-            result = subprocess.run([cmd, '--version'], capture_output=True, text=True, timeout=10)
-            if result.returncode == 0:
-                logger.warning(f"发现 Conda (建议改用 Mamba): {result.stdout.strip()}")
-                return cmd, 'conda'
-        except:
-            pass
-    
-    # 安装 miniforge (包含 mamba)
+    # 自动安装 Miniforge (包含 mamba)
     logger.progress("安装 Miniforge (包含 Mamba)...")
     install_path = os.path.expanduser("~/miniforge3")
     
@@ -306,54 +290,10 @@ def get_mamba_cmd():
         
         os.environ['PATH'] = f"{install_path}/bin:" + os.environ.get('PATH', '')
         logger.success("Miniforge (Mamba) 安装完成")
-        return mamba_bin, 'mamba'
-        
+        return mamba_bin
+
     except Exception as e:
         logger.error(f"Miniforge 安装失败: {e}")
-        logger.info("尝试安装 Miniconda 作为备选...")
-        return _install_miniconda_fallback()
-
-
-def _install_miniconda_fallback():
-    """备选：安装 Miniconda"""
-    install_path = os.path.expanduser("~/miniconda3")
-    
-    try:
-        logger.info("下载 Miniconda...")
-        subprocess.run(
-            ['wget', '-q', '--show-progress',
-             'https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh',
-             '-O', '/tmp/miniconda.sh'],
-            check=True, timeout=120
-        )
-        
-        logger.info("运行安装程序...")
-        subprocess.run(
-            ['bash', '/tmp/miniconda.sh', '-b', '-p', install_path],
-            check=True, timeout=60
-        )
-        
-        if os.path.exists('/tmp/miniconda.sh'):
-            os.remove('/tmp/miniconda.sh')
-        
-        conda_bin = f"{install_path}/bin/conda"
-        if not os.path.exists(conda_bin):
-            raise RuntimeError("Conda 安装后未找到")
-        
-        # 在 conda 环境中安装 mamba
-        logger.progress("在 Conda 中安装 Mamba...")
-        subprocess.run(
-            [conda_bin, 'install', '-n', 'base', '-c', 'conda-forge', 'mamba', '-y'],
-            check=True, timeout=300
-        )
-        
-        mamba_bin = f"{install_path}/bin/mamba"
-        os.environ['PATH'] = f"{install_path}/bin:" + os.environ.get('PATH', '')
-        logger.success("Mamba 安装完成 (通过 Conda)")
-        return mamba_bin, 'mamba'
-        
-    except Exception as e:
-        logger.error(f"Miniconda 安装也失败: {e}")
         raise
 
 
@@ -828,24 +768,10 @@ def install_dependencies():
         if not ok:
             raise RuntimeError("磁盘空间不足")
         
-        # 步骤 3: Mamba/Conda
+        # 步骤 3: Mamba 安装
         logger.section("Step 3: Mamba 安装")
-        CONDA_CMD, cmd_type = get_mamba_cmd()
-        
-        # 接受 ToS (仅 conda 需要)
-        if cmd_type == 'conda':
-            try:
-                for channel in ['main', 'r']:
-                    subprocess.run(
-                        [CONDA_CMD, 'tos', 'accept', 
-                         '--override-channels',
-                         '--channel', f'https://repo.anaconda.com/pkgs/{channel}'],
-                        capture_output=True, timeout=10
-                    )
-                logger.success("ToS 已接受")
-            except:
-                pass
-        
+        CONDA_CMD = get_mamba_cmd()
+
         # 步骤 4: 创建 conda 环境（仅基础包）
         logger.section("Step 4: Conda 环境创建")
         create_environment_yml()
@@ -855,7 +781,7 @@ def install_dependencies():
             logger.warning("环境已存在，删除重建...")
             shutil.rmtree(ENV_PREFIX, ignore_errors=True)
         
-        logger.progress(f"创建环境（使用 {cmd_type}）...")
+        logger.progress("创建环境（使用 Mamba）...")
         logger.info(f"目标路径: {ENV_PREFIX}")
         
         # 使用 mamba 或 conda 创建环境
