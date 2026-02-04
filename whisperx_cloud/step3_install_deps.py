@@ -53,11 +53,32 @@ def install_dependencies():
     
     print("\n📦 Installing dependencies with Conda...\n")
     
-    # 检测平台
+    # 检测平台 - 优先检测 Colab，再检测 Kaggle
+    IN_COLAB = 'google.colab' in sys.modules
     IN_KAGGLE = os.path.exists('/kaggle')
     
-    # Kaggle 持久化目录设置
-    if IN_KAGGLE:
+    # Colab 持久化目录设置（Google Drive 挂载）
+    if IN_COLAB:
+        # 检查是否有 Google Drive 挂载
+        if os.path.exists('/content/drive/MyDrive'):
+            ENV_PREFIX = '/content/drive/MyDrive/conda-envs/whisperx-cloud'
+            os.makedirs('/content/drive/MyDrive/conda-envs', exist_ok=True)
+            os.environ['HF_HOME'] = '/content/drive/MyDrive/.cache/huggingface'
+            os.environ['TORCH_HOME'] = '/content/drive/MyDrive/.cache/torch'
+            os.environ['CONDA_PKGS_DIRS'] = '/content/drive/MyDrive/.cache/conda/pkgs'
+            for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS']]:
+                os.makedirs(d, exist_ok=True)
+            print("📂 Colab with Drive: Using persistent directory")
+        else:
+            ENV_PREFIX = '/content/conda-envs/whisperx-cloud'
+            os.makedirs('/content/conda-envs', exist_ok=True)
+            os.environ['HF_HOME'] = '/content/.cache/huggingface'
+            os.environ['TORCH_HOME'] = '/content/.cache/torch'
+            os.environ['CONDA_PKGS_DIRS'] = '/content/.cache/conda/pkgs'
+            for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS']]:
+                os.makedirs(d, exist_ok=True)
+            print("📂 Colab without Drive: Using /content directory (non-persistent)")
+    elif IN_KAGGLE:
         ENV_PREFIX = '/kaggle/working/conda-envs/whisperx-cloud'
         os.makedirs('/kaggle/working/conda-envs', exist_ok=True)
         os.environ['HF_HOME'] = '/kaggle/working/.cache/huggingface'
@@ -132,7 +153,9 @@ dependencies:
     
     print(f"\n📌 Conda Python path saved: {CONDA_PYTHON}")
     
-    if IN_KAGGLE:
+    if IN_COLAB:
+        print(f"\n📌 COLAB: Environment at {ENV_PREFIX}")
+    elif IN_KAGGLE:
         print(f"\n📌 KAGGLE: Environment at {ENV_PREFIX}")
     
     return True

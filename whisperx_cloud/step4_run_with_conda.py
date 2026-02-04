@@ -16,12 +16,29 @@ def run_with_conda(script_path):
         with open('.conda_python_path', 'r') as f:
             conda_python = f.read().strip()
     except:
-        # 尝试默认路径
-        conda_python = os.path.expanduser('~/miniconda3/envs/whisperx-cloud/bin/python')
-        if not os.path.exists(conda_python):
+        # 尝试默认路径（优先检测 Colab，再检测 Kaggle）
+        IN_COLAB = 'google.colab' in sys.modules
+        IN_KAGGLE = os.path.exists('/kaggle')
+        
+        if IN_COLAB:
+            # Colab 路径
+            if os.path.exists('/content/drive/MyDrive'):
+                conda_python = '/content/drive/MyDrive/conda-envs/whisperx-cloud/bin/python'
+            else:
+                conda_python = '/content/conda-envs/whisperx-cloud/bin/python'
+            if not os.path.exists(conda_python):
+                conda_python = os.path.expanduser('~/miniconda3/envs/whisperx-cloud/bin/python')
+        elif IN_KAGGLE:
+            # Kaggle 路径
             conda_python = '/kaggle/working/conda-envs/whisperx-cloud/bin/python'
+            if not os.path.exists(conda_python):
+                conda_python = os.path.expanduser('~/miniconda3/envs/whisperx-cloud/bin/python')
+        else:
+            # 本地默认路径
+            conda_python = os.path.expanduser('~/miniconda3/envs/whisperx-cloud/bin/python')
+        
         if not os.path.exists(conda_python):
-            print("❌ Conda Python not found. Please run Step 4 first.")
+            print("❌ Conda Python not found. Please run Step 3 first to install dependencies.")
             sys.exit(1)
     
     # 使用 conda 环境运行脚本
