@@ -28,17 +28,17 @@ HF_ENDPOINT = "https://huggingface.co"
 
 def load_config():
     """加载配置并设置环境变量"""
-    # 设置 HuggingFace 端点
-    os.environ['HF_ENDPOINT'] = HF_ENDPOINT
-    
-    # 从环境变量覆盖（如果存在）
     global NGROK_AUTH_TOKEN, SERVER_PORT, DEFAULT_MODEL, ENABLE_DIARIZATION, HF_ENDPOINT
     
+    # 从环境变量覆盖（如果存在）
     NGROK_AUTH_TOKEN = os.environ.get('NGROK_AUTH_TOKEN', NGROK_AUTH_TOKEN)
     SERVER_PORT = int(os.environ.get('SERVER_PORT', SERVER_PORT))
     DEFAULT_MODEL = os.environ.get('DEFAULT_MODEL', DEFAULT_MODEL)
     ENABLE_DIARIZATION = os.environ.get('ENABLE_DIARIZATION', str(ENABLE_DIARIZATION)).lower() == 'true'
     HF_ENDPOINT = os.environ.get('HF_ENDPOINT', HF_ENDPOINT)
+    
+    # 设置 HuggingFace 端点
+    os.environ['HF_ENDPOINT'] = HF_ENDPOINT
     
     print("⚙️ Configuration loaded")
     print(f"   Model: {DEFAULT_MODEL}")
