@@ -15,6 +15,88 @@ Step 3: 安装 Conda 和依赖
 import subprocess
 import sys
 import os
+import socket
+import requests
+
+
+def detect_server_environment():
+    """
+    检测当前运行的服务器环境
+    返回: 'colab', 'kaggle', 'sagemaker', 'azure', 'gcp', 'aws', 'local', 'unknown'
+    """
+    hostname = socket.gethostname().lower()
+    
+    # 1. Colab 检测 (多种方式)
+    if (
+        'google.colab' in sys.modules or
+        os.path.exists('/content') or
+        'COLAB_GPU' in os.environ or
+        'COLAB_TPU_ADDR' in os.environ or
+        'colab' in hostname
+    ):
+        return 'colab'
+    
+    # 2. Kaggle 检测
+    if (
+        os.path.exists('/kaggle') or
+        'KAGGLE_KERNEL_RUN_TYPE' in os.environ or
+        'kaggle' in hostname
+    ):
+        return 'kaggle'
+    
+    # 3. AWS SageMaker 检测
+    if (
+        'SAGEMAKER_INTERNAL_IMAGE_URI' in os.environ or
+        'SM_MODEL_DIR' in os.environ or
+        'sagemaker' in hostname or
+        'aws' in hostname
+    ):
+        return 'sagemaker'
+    
+    # 4. Azure ML 检测
+    if (
+        'AZUREML_ARM_SUBSCRIPTION' in os.environ or
+        'AML_APP_ROOT' in os.environ or
+        'azure' in hostname or
+        'aml' in hostname
+    ):
+        return 'azure'
+    
+    # 5. GCP Vertex AI / Compute Engine 检测
+    # 尝试访问 GCP 元数据服务
+    try:
+        response = requests.get(
+            'http://metadata.google.internal/computeMetadata/v1/instance/',
+            headers={'Metadata-Flavor': 'Google'},
+            timeout=1
+        )
+        if response.status_code == 200:
+            return 'gcp'
+    except:
+        pass
+    
+    # 6. AWS EC2 检测
+    # 尝试访问 EC2 元数据服务
+    try:
+        response = requests.get(
+            'http://169.254.169.254/latest/meta-data/',
+            timeout=1
+        )
+        if response.status_code == 200:
+            return 'aws'
+    except:
+        pass
+    
+    # 7. 本地开发环境
+    if (
+        hostname in ['localhost', '127.0.0.1', ''] or
+        hostname.endswith('.local') or
+        os.path.exists('/Users')  # macOS
+    ):
+        return 'local'
+    
+    print(f"⚠️ Unknown environment (hostname: {hostname})")
+    return 'unknown'
 
 
 def get_conda_cmd():
@@ -64,12 +146,12 @@ def install_dependencies():
     
     print("\n📦 Installing dependencies with Conda...\n")
     
-    # 检测平台 - 优先检测 Colab，再检测 Kaggle
-    IN_COLAB = 'google.colab' in sys.modules
-    IN_KAGGLE = os.path.exists('/kaggle')
+    # 检测服务器环境
+    SERVER_ENV = detect_server_environment()
+    print(f"🔍 Detected environment: {SERVER_ENV.upper()}")
     
-    # Colab 持久化目录设置（Google Drive 挂载）
-    if IN_COLAB:
+    # 根据环境设置路径
+    if SERVER_ENV == 'colab':
         # 检查是否有 Google Drive 挂载
         if os.path.exists('/content/drive/MyDrive'):
             ENV_PREFIX = '/content/drive/MyDrive/conda-envs/whisperx-cloud'
@@ -89,7 +171,7 @@ def install_dependencies():
             for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS']]:
                 os.makedirs(d, exist_ok=True)
             print("📂 Colab without Drive: Using /content directory (non-persistent)")
-    elif IN_KAGGLE:
+    elif SERVER_ENV == 'kaggle':
         ENV_PREFIX = '/kaggle/working/conda-envs/whisperx-cloud'
         os.makedirs('/kaggle/working/conda-envs', exist_ok=True)
         os.environ['HF_HOME'] = '/kaggle/working/.cache/huggingface'
@@ -98,9 +180,36 @@ def install_dependencies():
         for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS']]:
             os.makedirs(d, exist_ok=True)
         print("📂 Kaggle: Using persistent directory")
+    elif SERVER_ENV in ['sagemaker', 'aws']:
+        ENV_PREFIX = '/home/ec2-user/conda-envs/whisperx-cloud'
+        os.makedirs('/home/ec2-user/conda-envs', exist_ok=True)
+        os.environ['HF_HOME'] = '/home/ec2-user/.cache/huggingface'
+        os.environ['TORCH_HOME'] = '/home/ec2-user/.cache/torch'
+        os.environ['CONDA_PKGS_DIRS'] = '/home/ec2-user/.cache/conda/pkgs'
+        for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS']]:
+            os.makedirs(d, exist_ok=True)
+        print("📂 AWS: Using EC2 user directory")
+    elif SERVER_ENV == 'azure':
+        ENV_PREFIX = '/home/azureuser/conda-envs/whisperx-cloud'
+        os.makedirs('/home/azureuser/conda-envs', exist_ok=True)
+        os.environ['HF_HOME'] = '/home/azureuser/.cache/huggingface'
+        os.environ['TORCH_HOME'] = '/home/azureuser/.cache/torch'
+        os.environ['CONDA_PKGS_DIRS'] = '/home/azureuser/.cache/conda/pkgs'
+        for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS']]:
+            os.makedirs(d, exist_ok=True)
+        print("📂 Azure: Using azureuser directory")
+    elif SERVER_ENV == 'gcp':
+        ENV_PREFIX = '/home/jupyter/conda-envs/whisperx-cloud'
+        os.makedirs('/home/jupyter/conda-envs', exist_ok=True)
+        os.environ['HF_HOME'] = '/home/jupyter/.cache/huggingface'
+        os.environ['TORCH_HOME'] = '/home/jupyter/.cache/torch'
+        os.environ['CONDA_PKGS_DIRS'] = '/home/jupyter/.cache/conda/pkgs'
+        for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS']]:
+            os.makedirs(d, exist_ok=True)
+        print("📂 GCP: Using jupyter directory")
     else:
         ENV_PREFIX = None
-        print("📂 Local: Using default conda env location")
+        print("📂 Local/Unknown: Using default conda env location")
     
     # 创建环境文件
     environment_yml = '''name: whisperx-cloud
@@ -185,10 +294,12 @@ dependencies:
         
         print(f"\n📌 Conda Python path saved: {CONDA_PYTHON}")
         
-        if IN_COLAB:
+        if SERVER_ENV == 'colab':
             print(f"\n📌 COLAB: Environment at {ENV_PREFIX}")
-        elif IN_KAGGLE:
+        elif SERVER_ENV == 'kaggle':
             print(f"\n📌 KAGGLE: Environment at {ENV_PREFIX}")
+        elif SERVER_ENV != 'local':
+            print(f"\n📌 {SERVER_ENV.upper()}: Environment at {ENV_PREFIX}")
         
         return True
         
