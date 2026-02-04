@@ -1,32 +1,99 @@
-# WhisperX Cloud API Server Requirements
-# Minimal dependencies for whisperX deployment
+# WhisperX Cloud API Server - Requirements
+# Compatible with VideoLingo project
+# Reference: Parent project VideoLingo/requirements.txt
+#
+# Installation Options:
+#   1. pip install -r requirements.txt (after PyTorch installation)
+#   2. conda env create -f environment.yml (recommended for GPU servers)
+#
+# Note: PyTorch must be installed separately based on your CUDA version
+#   CUDA 11.8: pip install torch==2.0.0+cu118 torchaudio==2.0.0+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
+#   CPU only:  pip install torch==2.0.0 torchaudio==2.0.0
 
-# Core ASR
+# ======================== Core ASR ========================
+# Faster Whisper - Optimized Whisper implementation
+# Reference: VideoLingo uses whisperx with faster-whisper backend
 faster-whisper==1.0.0
+
+# WhisperX - Main ASR engine with word-level alignment
+# Pinned to specific commit for stability (same as VideoLingo)
+# Reference: VideoLingo/requirements.txt line 27
 whisperx @ git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853
 
-# Deep Learning
+# ======================== Deep Learning ========================
+# PyTorch - Deep learning framework
+# IMPORTANT: Install CUDA version matching your system
+# Version synced with VideoLingo for compatibility
 torch==2.0.0
 torchaudio==2.0.0
+
+# CTranslate2 - Fast neural network inference engine
+# Required by whisperX, version pinned for compatibility
+# Reference: VideoLingo/requirements.txt line 23
 ctranslate2==4.4.0
+
+# Transformers - Hugging Face model library
+# Version pinned to match whisperX requirements
+# Reference: VideoLingo/requirements.txt line 4
 transformers==4.39.3
 
-# Audio Processing
+# ======================== Audio Processing ========================
+# Librosa - Audio analysis and feature extraction
+# Version synced with VideoLingo
+# Reference: VideoLingo/requirements.txt line 1
 librosa==0.10.2.post1
+
+# SoundFile - Audio file I/O (libsndfile wrapper)
 soundfile>=0.12.1
 
-# API Framework
+# ======================== API Framework ========================
+# FastAPI - Modern, fast web framework for building APIs
 fastapi==0.109.0
+
+# Uvicorn - ASGI server for FastAPI
 uvicorn[standard]==0.27.0
+
+# Python Multipart - Form data parsing for file uploads
 python-multipart==0.0.6
 
-# Speaker Diarization (optional)
-pyannote.audio==3.1.1
+# ======================== Speaker Diarization (Optional) ========================
+# Uncomment to enable speaker diarization feature
+# Requires HuggingFace token and accepts terms for pyannote models
+# Note: Increases GPU memory usage significantly
+# pyannote.audio==3.1.1
 
-# Utilities
+# ======================== Utilities ========================
+# NumPy - Numerical computing
+# Version pinned for compatibility with other packages
+# Reference: VideoLingo/requirements.txt line 6
 numpy==1.26.4
+
+# Pandas - Data manipulation and analysis
+# Reference: VideoLingo/requirements.txt line 10
 pandas==2.2.3
+
+# Pydantic - Data validation using type hints
 pydantic==2.5.3
 
-# Note: PyTorch CUDA version will be installed separately based on CUDA version
-# pip install torch==2.0.0+cu118 torchaudio==2.0.0+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
+# Requests - HTTP library for API calls
+requests
+
+# pyngrok - Public URL generation for local servers
+pyngrok
+
+# ======================== Kaggle/Notebook Specific ========================
+# nest_asyncio - Allow nested event loops in notebooks
+# Required for running FastAPI in Kaggle notebooks
+nest_asyncio
+
+# ======================== Version Compatibility Notes ========================
+# Python: 3.9 - 3.11 supported (3.10 recommended)
+# CUDA: 11.8 or 12.1 (11.8 recommended for compatibility)
+# GPU Memory: Minimum 4GB, Recommended 8GB+ for large-v3 model
+#
+# Model Cache Directory: ~/.cache/whisperx/
+# First run will download models (~3GB for large-v3)
+#
+# For VideoLingo integration:
+#   Set whisper.runtime = 'cloud' in VideoLingo/config.yaml
+#   Or set environment variable: WHISPERX_CLOUD_URL

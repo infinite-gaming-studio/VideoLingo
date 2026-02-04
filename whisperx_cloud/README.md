@@ -1,215 +1,179 @@
-# WhisperX Cloud Deployment
+# WhisperX Cloud API Server ☁️
 
-将 WhisperX 单独部署到 GPU 云服务器，VideoLingo 通过 API 调用。
+Standalone WhisperX ASR service for VideoLingo. Deploy on cloud GPU platforms (Google Colab, Kaggle, etc.) or local GPU servers.
 
-## 📁 文件说明
+## 🎯 Features
 
+- ✅ Word-level timestamp alignment
+- ✅ Multi-language support
+- ✅ Optional speaker diarization
+- ✅ FastAPI-based REST API
+- ✅ ngrok tunnel for public URLs
+- ✅ Compatible with VideoLingo cloud runtime
+
+## 📋 Requirements
+
+- Python 3.9 - 3.11 (3.10 recommended)
+- NVIDIA GPU with CUDA 11.8+ (for GPU acceleration)
+- 4GB+ GPU memory (8GB+ recommended for large-v3 model)
+
+## 🚀 Installation
+
+### Option 1: Conda (Recommended for Local GPU Servers)
+
+Conda provides better environment isolation and automatic CUDA dependency management.
+
+```bash
+# Method 1: Using environment.yml
+conda env create -f environment.yml
+conda activate whisperx-cloud
+
+# Method 2: Using installation script
+python install_conda.py
 ```
-whisperx_cloud/
-├── whisperx_server.py           # FastAPI 服务端（独立部署时使用）
-├── requirements.txt             # 精简依赖
-├── WhisperX_Cloud_Unified.ipynb # ⭐ 统一部署 Notebook (支持 Colab/Kaggle/本地)
-├── whisperx_cloud_client.py     # VideoLingo 客户端
-└── README.md                    # 本文档
+
+### Option 2: Pip (For Colab/Kaggle)
+
+```bash
+# Install PyTorch with CUDA 11.8
+pip install torch==2.0.0+cu118 torchaudio==2.0.0+cu118 \
+    --extra-index-url https://download.pytorch.org/whl/cu118
+
+# Install other dependencies
+pip install -r requirements.txt
 ```
 
-## 🚀 快速开始
+### Option 3: Jupyter Notebook (Colab/Kaggle)
 
-### 1. 部署服务端
+Open `WhisperX_Cloud_Unified.ipynb` in Google Colab or Kaggle and run all cells.
 
-**推荐使用统一 Notebook (WhisperX_Cloud_Unified.ipynb):**
+## 🔧 Configuration
 
-- ✅ **自动检测环境** - 支持 Colab/Kaggle/本地 GPU 服务器
-- ✅ **一键部署** - 自动安装依赖、启动服务、创建隧道
-- ✅ **内置 ngrok** - 自动生成公共 URL
-- ✅ **智能配置** - 自动检测 GPU、调整 batch_size
+Create a `.env` file or set environment variables:
 
-**部署步骤:**
+```bash
+# Required for public URL (get from https://dashboard.ngrok.com)
+NGROK_AUTH_TOKEN=your_token_here
 
-1. **Google Colab:**
-   - 上传 `WhisperX_Cloud_Unified.ipynb` 到 Colab
-   - Runtime → Change runtime type → GPU
-   - 设置 ngrok token (下面有获取方法)
-   - Runtime → Run all
-   - 复制输出的 Public URL
+# Server configuration
+PORT=8000
+HOST=0.0.0.0
 
-2. **Kaggle:**
-   - 上传 `WhisperX_Cloud_Unified.ipynb` 到 Kaggle
-   - Settings → Accelerator → GPU T4 x2
-   - 设置 ngrok token
-   - Run all → 复制 URL
+# HuggingFace settings (for China users)
+HF_ENDPOINT=https://hf-mirror.com
+```
 
-3. **本地 GPU 服务器:**
-   ```bash
-   # 方法 A: 使用 Notebook
-   jupyter notebook WhisperX_Cloud_Unified.ipynb
-   
-   # 方法 B: 直接运行服务端
-   pip install -r requirements.txt
-   python whisperx_server.py
-   # 配置反向代理或使用 ngrok
-   ```
+## ▶️ Usage
 
-### 2. 配置 VideoLingo
+### Start Server
 
-编辑 `config.yaml`:
+```bash
+# Activate conda environment (if using conda)
+conda activate whisperx-cloud
+
+# Start server
+python whisperx_server.py
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Health check |
+| `/transcribe` | POST | Transcribe audio file |
+| `/cache` | DELETE | Clear model cache |
+| `/stats` | GET | Server statistics |
+
+### Example Request
+
+```bash
+curl -X POST "http://localhost:8000/transcribe" \
+  -F "audio=@audio.wav" \
+  -F "model=large-v3" \
+  -F "language=zh"
+```
+
+## 🔗 VideoLingo Integration
+
+### Method 1: config.yaml
 
 ```yaml
 whisper:
   runtime: 'cloud'
-  whisperX_cloud_url: 'https://xxxx.ngrok-free.app'  # 从 Notebook 输出复制
-  cloud_timeout: 300  # API 超时时间（秒）
+  whisperX_cloud_url: 'https://xxxx.ngrok-free.app'  # Your server URL
 ```
 
-或使用环境变量:
+### Method 2: Environment Variable
+
 ```bash
 export WHISPERX_CLOUD_URL='https://xxxx.ngrok-free.app'
 ```
 
-### 3. 测试连接
+### Method 3: Python Client
 
 ```python
-# 在 VideoLingo 目录下运行
-python whisperx_cloud/whisperx_cloud_client.py
+from whisperx_cloud_client import WhisperXCloudClient
+
+client = WhisperXCloudClient(base_url='https://xxxx.ngrok-free.app')
+result = client.transcribe('audio.wav', language='zh')
 ```
 
-## 🔧 进阶配置
-
-### Notebook 配置选项
-
-在 `WhisperX_Cloud_Unified.ipynb` 的第一个单元格中配置:
-
-```python
-# ngrok 认证令牌 (必需)
-NGROK_AUTH_TOKEN = "你的_token"
-
-# API 端口
-SERVER_PORT = 8000
-
-# 默认模型
-DEFAULT_MODEL = "large-v3"  # 可选: tiny, base, small, medium, large-v1/v2/v3
-
-# 是否启用说话人分离 (需要更多显存)
-ENABLE_DIARIZATION = False
-
-# HuggingFace 镜像 (中国大陆用户)
-HF_ENDPOINT = "https://hf-mirror.com"
-```
-
-### API 端点
-
-- `GET /` - 健康检查 + 服务器信息
-- `GET /stats` - GPU 使用统计
-- `POST /transcribe` - 转录音频
-  - 参数: `audio` (文件), `language`, `model`, `align`, `speaker_diarization`
-  - 返回: 带单词级时间戳的字幕
-- `DELETE /cache` - 清除模型缓存（释放显存）
-
-### 使用客户端类
-
-```python
-from whisperx_cloud.whisperx_cloud_client import WhisperXCloudClient, WhisperXConfig
-
-# 创建配置
-config = WhisperXConfig(
-    cloud_url='https://xxxx.ngrok-free.app',
-    default_model='large-v3',
-    api_timeout=300
-)
-
-# 创建客户端
-client = WhisperXCloudClient(config)
-
-# 健康检查
-info = client.health_check()
-
-# 转录音频
-result = client.transcribe(
-    audio_path='audio.wav',
-    language='zh',
-    align=True
-)
-
-# 清理缓存
-client.clear_cache()
-```
-
-## 🆓 免费 GPU 资源
-
-| 平台 | GPU | 时长限制 | 特点 |
-|------|-----|----------|------|
-| Google Colab | T4 | 12小时/天 | 最稳定，易用 |
-| Kaggle | T4 x2 | 30小时/周 | 双 GPU，适合大批量 |
-
-## 📋 ngrok Token 获取
-
-1. 访问 https://ngrok.com/signup 注册
-2. 登录后访问 https://dashboard.ngrok.com/get-started/your-authtoken
-3. 复制 token 粘贴到 Notebook 配置中
-
-**注意:** ngrok 免费版 URL 每次重启会变。如需固定域名，请升级 ngrok Pro。
-
-## 🔌 故障排除
-
-### 1. "No cloud URL configured"
-
-检查 `config.yaml`:
-```yaml
-whisper:
-  runtime: 'cloud'
-  whisperX_cloud_url: '你的URL'
-```
-
-### 2. ngrok 连接失败
-
-- 检查 token 是否正确
-- Kaggle 用户：确认 Settings → Internet 为 ON
-- 尝试重新运行 Notebook 第 5、6 单元格
-
-### 3. GPU 未检测到
-
-- Colab: Runtime → Change runtime type → GPU
-- Kaggle: Settings → Accelerator → GPU T4 x2
-
-### 4. 模型下载慢
-
-中国大陆用户在 Notebook 配置中设置:
-```python
-HF_ENDPOINT = "https://hf-mirror.com"
-```
-
-### 5. 显存不足
-
-- 使用较小模型: `medium` 或 `small`
-- 在 Notebook 配置中减小 `DEFAULT_MODEL`
-- 禁用 `ENABLE_DIARIZATION`
-
-## 🎯 优势
-
-1. **节省本地资源** - 云端处理 ASR，本地只做后续步骤
-2. **免费 GPU** - Colab/Kaggle 提供免费额度
-3. **一键部署** - Notebook 自动完成所有配置
-4. **跨平台** - 支持 Colab/Kaggle/本地 GPU 服务器
-5. **兼容性好** - 返回格式与本地 whisperX 完全一致
-
-## 🔄 工作流程
+## 📁 File Structure
 
 ```
-VideoLingo (本地) 
-    ↓ 上传音频
-WhisperX Cloud (Colab/Kaggle)
-    ↓ 返回转录结果
-VideoLingo (本地) 
-    ↓ 继续翻译、配音等
+whisperx_cloud/
+├── environment.yml           # Conda environment configuration
+├── install_conda.py          # Conda installation script
+├── requirements.txt          # Pip dependencies with detailed comments
+├── whisperx_server.py        # FastAPI server implementation
+├── whisperx_cloud_client.py  # Python client for VideoLingo
+├── WhisperX_Cloud_Unified.ipynb  # Universal notebook for Colab/Kaggle
+└── README.md                 # This file
 ```
 
-## 📞 支持
+## 🔬 Dependency Versions
 
-有问题请查看:
-1. Notebook 中的 "故障排除" 部分
-2. 运行 `python whisperx_cloud/whisperx_cloud_client.py` 测试连接
-3. 检查服务器健康: `curl https://your-url.ngrok-free.app/`
+Dependencies are pinned to match VideoLingo parent project for compatibility:
 
-## 📝 License
+| Package | Version | Notes |
+|---------|---------|-------|
+| torch | 2.0.0 | Synced with VideoLingo |
+| whisperx | commit 7307306 | Pinned for stability |
+| ctranslate2 | 4.4.0 | Required by whisperX |
+| transformers | 4.39.3 | HuggingFace models |
+| fastapi | 0.109.0 | API framework |
 
-与 VideoLingo 项目保持一致。
+## 🐛 Troubleshooting
+
+### GPU Not Detected
+
+```bash
+# Check CUDA installation
+nvidia-smi
+
+# Verify PyTorch CUDA
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+### Model Download Slow
+
+```bash
+# For China users, use mirror
+export HF_ENDPOINT=https://hf-mirror.com
+```
+
+### Out of Memory
+
+- Use smaller model: `medium` or `small`
+- Reduce batch_size in requests
+- Disable speaker diarization
+
+## 📚 References
+
+- [VideoLingo Parent Project](../README.md)
+- [WhisperX Documentation](https://github.com/m-bain/whisperX)
+- [VideoLingo Configuration](../config.yaml)
+
+## 📄 License
+
+Same as VideoLingo parent project.
