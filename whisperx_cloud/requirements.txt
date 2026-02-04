@@ -1,0 +1,32 @@
+# WhisperX Cloud API Server Requirements
+# Minimal dependencies for whisperX deployment
+
+# Core ASR
+faster-whisper==1.0.0
+whisperx @ git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853
+
+# Deep Learning
+torch==2.0.0
+torchaudio==2.0.0
+ctranslate2==4.4.0
+transformers==4.39.3
+
+# Audio Processing
+librosa==0.10.2.post1
+soundfile>=0.12.1
+
+# API Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Speaker Diarization (optional)
+pyannote.audio==3.1.1
+
+# Utilities
+numpy==1.26.4
+pandas==2.2.3
+pydantic==2.5.3
+
+# Note: PyTorch CUDA version will be installed separately based on CUDA version
+# pip install torch==2.0.0+cu118 torchaudio==2.0.0+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
