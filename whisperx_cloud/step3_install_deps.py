@@ -17,6 +17,7 @@ import os
 
 def check_conda():
     """检查 Conda 是否可用"""
+    # 尝试标准 conda 命令
     try:
         result = subprocess.run(['conda', '--version'], capture_output=True, text=True)
         if result.returncode == 0:
@@ -24,13 +25,49 @@ def check_conda():
             return True
     except FileNotFoundError:
         pass
+    
+    # 尝试用户目录下的 miniconda
+    miniconda_path = os.path.expanduser('~/miniconda3/bin/conda')
+    if os.path.exists(miniconda_path):
+        try:
+            result = subprocess.run([miniconda_path, '--version'], capture_output=True, text=True)
+            if result.returncode == 0:
+                print(f"✅ Conda detected: {result.stdout.strip()}")
+                # 添加到 PATH
+                os.environ['PATH'] = os.path.expanduser('~/miniconda3/bin:') + os.environ.get('PATH', '')
+                return True
+        except:
+            pass
+    
     return False
+
+
+def get_conda_cmd():
+    """获取 conda 命令路径"""
+    # 检查标准 conda
+    try:
+        result = subprocess.run(['conda', '--version'], capture_output=True, text=True)
+        if result.returncode == 0:
+            return 'conda'
+    except:
+        pass
+    
+    # 检查用户目录 miniconda
+    miniconda_conda = os.path.expanduser('~/miniconda3/bin/conda')
+    if os.path.exists(miniconda_conda):
+        # 确保 PATH 包含 miniconda
+        os.environ['PATH'] = os.path.expanduser('~/miniconda3/bin:') + os.environ.get('PATH', '')
+        return miniconda_conda
+    
+    return None
 
 
 def install_dependencies():
     """使用 Conda 安装依赖包"""
     
-    if not check_conda():
+    CONDA_CMD = get_conda_cmd()
+    
+    if not CONDA_CMD:
         print("❌ ERROR: Conda is not installed or not available in PATH!")
         print("\n请按以下步骤安装 Conda:")
         print("1. 安装 Miniconda: https://docs.conda.io/en/latest/miniconda.html")
@@ -100,21 +137,21 @@ dependencies:
         env_exists = os.path.exists(ENV_PREFIX)
     else:
         # 本地: 检查命名环境
-        result = subprocess.run(['conda', 'env', 'list'], capture_output=True, text=True)
+        result = subprocess.run([CONDA_CMD, 'env', 'list'], capture_output=True, text=True)
         env_exists = 'whisperx-cloud' in result.stdout
     
     if env_exists:
         print("\n🔄 Environment 'whisperx-cloud' already exists, updating...")
         if ENV_PREFIX:
-            subprocess.check_call(['conda', 'env', 'update', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'])
+            subprocess.check_call([CONDA_CMD, 'env', 'update', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'])
         else:
-            subprocess.check_call(['conda', 'env', 'update', '-f', 'environment.yml', '-n', 'whisperx-cloud', '--yes'])
+            subprocess.check_call([CONDA_CMD, 'env', 'update', '-f', 'environment.yml', '-n', 'whisperx-cloud', '--yes'])
     else:
         print("\n🆕 Creating new conda environment 'whisperx-cloud'...")
         if ENV_PREFIX:
-            subprocess.check_call(['conda', 'env', 'create', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'])
+            subprocess.check_call([CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'])
         else:
-            subprocess.check_call(['conda', 'env', 'create', '-f', 'environment.yml', '--yes'])
+            subprocess.check_call([CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--yes'])
     
     print("\n✅ Conda environment setup complete!")
     

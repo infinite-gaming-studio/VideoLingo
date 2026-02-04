@@ -52,12 +52,18 @@ def install_miniconda():
     print(f"   Installing to {install_path}...")
     subprocess.run(["bash", "/tmp/miniconda.sh", "-b", "-p", install_path], check=True)
     
-    # 初始化 shell
-    print("   Initializing conda...")
+    # 添加 PATH 到当前会话
+    print("   Adding to PATH...")
+    os.environ['PATH'] = f"{install_path}/bin:" + os.environ.get('PATH', '')
+    
+    # 初始化 conda for bash
     subprocess.run([f"{install_path}/bin/conda", "init", "bash"], check=True)
     
-    # 添加 PATH
-    os.environ['PATH'] = f"{install_path}/bin:" + os.environ.get('PATH', '')
+    # 创建 conda 配置文件，确保后续可用
+    conda_rc = os.path.expanduser("~/.condarc")
+    if not os.path.exists(conda_rc):
+        with open(conda_rc, 'w') as f:
+            f.write("auto_activate_base: false\n")
     
     # 清理
     os.remove("/tmp/miniconda.sh")
