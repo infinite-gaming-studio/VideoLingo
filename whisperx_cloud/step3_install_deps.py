@@ -126,39 +126,66 @@ dependencies:
         env_exists = 'whisperx-cloud' in result.stdout
     
     # 创建或更新环境
-    if env_exists:
-        print("\n🔄 Environment exists, updating...")
-        if ENV_PREFIX:
-            subprocess.run([CONDA_CMD, 'env', 'update', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'])
+    try:
+        if env_exists:
+            print("\n🔄 Environment exists, updating...")
+            if ENV_PREFIX:
+                result = subprocess.run([CONDA_CMD, 'env', 'update', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'], 
+                                      capture_output=True, text=True)
+            else:
+                result = subprocess.run([CONDA_CMD, 'env', 'update', '-f', 'environment.yml', '-n', 'whisperx-cloud', '--yes'],
+                                      capture_output=True, text=True)
         else:
-            subprocess.run([CONDA_CMD, 'env', 'update', '-f', 'environment.yml', '-n', 'whisperx-cloud', '--yes'])
-    else:
-        print("\n🆕 Creating new environment...")
+            print("\n🆕 Creating new environment...")
+            if ENV_PREFIX:
+                result = subprocess.run([CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'],
+                                      capture_output=True, text=True)
+            else:
+                result = subprocess.run([CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--yes'],
+                                      capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print(f"\n❌ Conda environment creation failed!")
+            print(f"Error output: {result.stderr}")
+            print(f"Standard output: {result.stdout}")
+            return False
+            
+        print("\n✅ Conda environment setup complete!")
+        
+        # 获取 conda 环境的 Python 路径
         if ENV_PREFIX:
-            subprocess.run([CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'])
+            CONDA_PYTHON = f"{ENV_PREFIX}/bin/python"
         else:
-            subprocess.run([CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--yes'])
-    
-    print("\n✅ Conda environment setup complete!")
-    
-    # 获取 conda 环境的 Python 路径
-    if ENV_PREFIX:
-        CONDA_PYTHON = f"{ENV_PREFIX}/bin/python"
-    else:
-        CONDA_PYTHON = os.path.expanduser('~/miniconda3/envs/whisperx-cloud/bin/python')
-    
-    # 保存配置供后续步骤使用
-    with open('.conda_python_path', 'w') as f:
-        f.write(CONDA_PYTHON)
-    
-    print(f"\n📌 Conda Python path saved: {CONDA_PYTHON}")
-    
-    if IN_COLAB:
-        print(f"\n📌 COLAB: Environment at {ENV_PREFIX}")
-    elif IN_KAGGLE:
-        print(f"\n📌 KAGGLE: Environment at {ENV_PREFIX}")
-    
-    return True
+            CONDA_PYTHON = os.path.expanduser('~/miniconda3/envs/whisperx-cloud/bin/python')
+        
+        # 验证 Python 解释器是否存在
+        if not os.path.exists(CONDA_PYTHON):
+            print(f"\n❌ Python interpreter not found at: {CONDA_PYTHON}")
+            print("Checking environment directory contents...")
+            if ENV_PREFIX and os.path.exists(ENV_PREFIX):
+                import subprocess as sp
+                ls_result = sp.run(['ls', '-la', ENV_PREFIX], capture_output=True, text=True)
+                print(ls_result.stdout)
+            return False
+        
+        # 保存配置供后续步骤使用
+        with open('.conda_python_path', 'w') as f:
+            f.write(CONDA_PYTHON)
+        
+        print(f"\n📌 Conda Python path saved: {CONDA_PYTHON}")
+        
+        if IN_COLAB:
+            print(f"\n📌 COLAB: Environment at {ENV_PREFIX}")
+        elif IN_KAGGLE:
+            print(f"\n📌 KAGGLE: Environment at {ENV_PREFIX}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"\n❌ Error during environment setup: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 if __name__ == "__main__":
