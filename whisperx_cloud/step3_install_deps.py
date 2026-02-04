@@ -175,7 +175,7 @@ def ensure_directory(path: str) -> bool:
             return False
         
         # 创建测试文件验证可写性
-        test_file = Path(path) / ".write_test_" + str(int(time.time()))
+        test_file = Path(path) / f".write_test_{int(time.time())}"
         try:
             test_file.write_text("test")
             test_file.unlink()
