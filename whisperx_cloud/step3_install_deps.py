@@ -302,7 +302,7 @@ def get_mamba_cmd():
 
 
 def pip_install_with_retry(python_path: str, packages: List[str], desc: str = "", 
-                           timeout: int = 600, use_cache: bool = True) -> bool:
+                           timeout: int = 600, use_cache: bool = True, no_deps: bool = False) -> bool:
     """
     批量安装 pip 包，带重试机制和进度显示
     
@@ -312,6 +312,7 @@ def pip_install_with_retry(python_path: str, packages: List[str], desc: str = ""
         desc: 安装阶段描述
         timeout: 超时时间
         use_cache: 是否使用 pip 缓存
+        no_deps: 是否不安装依赖（用于避免与conda包冲突）
     """
     if not packages:
         return True
@@ -324,9 +325,13 @@ def pip_install_with_retry(python_path: str, packages: List[str], desc: str = ""
     # 启用并行下载
     cmd.extend(['--progress-bar', 'on'])
     
-    # 缓存策略：使用本地缓存加速，但禁用远程缓存检查（节省网络）
+    # 缓存策略
     if not use_cache:
         cmd.append('--no-cache-dir')
+    
+    # 不安装依赖（避免与conda安装的包冲突，如av）
+    if no_deps:
+        cmd.append('--no-deps')
     
     # 添加所有包
     cmd.extend(packages)
@@ -334,7 +339,8 @@ def pip_install_with_retry(python_path: str, packages: List[str], desc: str = ""
     # 重试逻辑
     for attempt in range(1, MAX_RETRIES + 1):
         start_time = time.time()
-        logger.info(f"  尝试 {attempt}/{MAX_RETRIES}: pip install {' '.join(packages[:3])}{'...' if len(packages) > 3 else ''}")
+        pkg_preview = ' '.join(packages[:2]) + ('...' if len(packages) > 2 else '')
+        logger.info(f"  尝试 {attempt}/{MAX_RETRIES}: pip install {pkg_preview}")
         
         try:
             result = subprocess.run(
@@ -349,7 +355,8 @@ def pip_install_with_retry(python_path: str, packages: List[str], desc: str = ""
                 logger.success(f"  安装成功 ({elapsed:.1f}s)")
                 return True
             else:
-                logger.warning(f"  安装失败: {result.stderr[:300]}")
+                err_msg = result.stderr[:400] if result.stderr else "未知错误"
+                logger.warning(f"  安装失败: {err_msg}")
                 if attempt < MAX_RETRIES:
                     logger.info(f"  {RETRY_DELAY}秒后重试...")
                     time.sleep(RETRY_DELAY)
@@ -361,7 +368,7 @@ def pip_install_with_retry(python_path: str, packages: List[str], desc: str = ""
             logger.warning(f"  安装超时 ({timeout}s)")
             if attempt < MAX_RETRIES:
                 logger.info(f"  增加超时时间重试...")
-                timeout += 300  # 增加5分钟
+                timeout += 300
             else:
                 return False
         except Exception as e:
@@ -373,15 +380,14 @@ def pip_install_with_retry(python_path: str, packages: List[str], desc: str = ""
 
 def install_pip_dependencies(env_prefix: str) -> bool:
     """
-    分层批量安装 pip 依赖 - 运维级极速安装
+    分层批量安装 pip 依赖 - 保持 conda 环境纯粹性
     
-    优化策略：
-    1. 分层安装：底层ML库 → 中间件 → 应用包 → WhisperX
-    2. 批量安装：每层所有包一次性安装，减少网络往返
-    3. 启用缓存：利用 pip 本地缓存加速
-    4. 智能重试：网络错误自动重试3次
+    关键原则：
+    1. 不升级 pip（保持 conda 安装的版本）
+    2. 避免与 conda 包冲突（conda 已安装 av, numpy 等）
+    3. pyannote.audio 使用 --no-deps 安装，防止重新编译 av
     """
-    logger.section("Step 5: Pip 依赖安装 (极速批量模式)")
+    logger.section("Step 5: Pip 依赖安装 (批量模式)")
     step_start = time.time()
     
     python_path = f"{env_prefix}/bin/python"
@@ -396,17 +402,14 @@ def install_pip_dependencies(env_prefix: str) -> bool:
         logger.error(f"错误：Python 不在 conda 环境中！预期: {env_prefix}, 实际: {actual_python}")
         return False
     
-    # 升级 pip（一次性）
-    logger.info("升级 pip...")
-    result = subprocess.run([python_path, '-m', 'pip', 'install', '--upgrade', 'pip'], 
-                          capture_output=True, text=True, timeout=60)
-    if result.returncode == 0:
-        logger.success("pip 升级成功")
+    # 显示 pip 版本（不升级）
+    result = subprocess.run([python_path, '-m', 'pip', '--version'], 
+                          capture_output=True, text=True)
+    logger.info(f"使用 pip: {result.stdout.strip()}")
     
     # ==================== 分层依赖定义 ====================
-    # Layer 1: 底层 ML 基础设施（最重，最需要缓存）
+    # Layer 1: 底层 ML 基础设施
     layer1_ml_base = [
-        "numpy==1.26.4",  # 与 conda 一致，但确保 pip 也知道
         "ctranslate2==4.4.0",
         "transformers==4.39.3",
         "pandas==2.2.3",
@@ -416,11 +419,23 @@ def install_pip_dependencies(env_prefix: str) -> bool:
         "nltk",
     ]
     
-    # Layer 2: ASR 相关（依赖 Layer 1）
+    # Layer 2: ASR 引擎
     layer2_asr = [
         "faster-whisper==1.0.0",
-        "pyannote.audio==3.1.1",
     ]
+    
+    # Layer 2b: pyannote.audio 的依赖（排除已由 conda 安装的包）
+    # 这些依赖在安装 pyannote 前必须先装，然后用 --no-deps 装 pyannote
+    pyannote_deps = [
+        "asteroid-filterbanks>=0.4",
+        "pytorch-metric-learning>=2.1.0",
+        "speechbrain>=0.5.14",
+        "omegaconf>=2.1,<3.0",
+        "hydra-core>=1.1,<1.3",
+        "rich>=12.0.0",
+        "semver>=3.0.0",
+    ]
+    pyannote_pkg = "pyannote.audio==3.1.1"
     
     # Layer 3: API 框架和工具
     layer3_api = [
@@ -431,10 +446,10 @@ def install_pip_dependencies(env_prefix: str) -> bool:
         "pyngrok",
         "requests",
         "nest_asyncio",
-        "docopt",  # WhisperX CLI 需要
+        "docopt",
     ]
     
-    # Layer 4: WhisperX (Git 安装，依赖以上所有)
+    # Layer 4: WhisperX
     WHISPERX_COMMIT = '7307306a9d8dd0d261e588cc933322454f853853'
     whisperx_pkg = f"git+https://github.com/m-bain/whisperx.git@{WHISPERX_COMMIT}"
     
@@ -447,11 +462,26 @@ def install_pip_dependencies(env_prefix: str) -> bool:
         logger.error("ML 基础库安装失败")
         all_success = False
     
-    # Layer 2: ASR
+    # Layer 2: faster-whisper
     if all_success and not pip_install_with_retry(python_path, layer2_asr,
-                                                   "安装 ASR 引擎", timeout=600, use_cache=True):
-        logger.error("ASR 引擎安装失败")
+                                                   "安装 faster-whisper", timeout=300, use_cache=True):
+        logger.error("faster-whisper 安装失败")
         all_success = False
+    
+    # Layer 2b: pyannote.audio（方案A：先装依赖，再 --no-deps 装本体）
+    if all_success:
+        logger.info("安装 pyannote.audio 依赖（排除 conda 已安装的 av/torch/numpy）...")
+        if pip_install_with_retry(python_path, pyannote_deps,
+                                   "安装 pyannote 依赖", timeout=300, use_cache=True):
+            # 依赖装好后，用 --no-deps 装 pyannote（避免重新编译 av）
+            if pip_install_with_retry(python_path, [pyannote_pkg],
+                                       "安装 pyannote.audio", timeout=300, use_cache=True, no_deps=True):
+                logger.success("pyannote.audio 安装成功")
+            else:
+                logger.warning("pyannote.audio 本体安装失败，但继续...")
+        else:
+            logger.warning("pyannote 依赖安装失败，跳过 pyannote...")
+            # pyannote 是可选的（说话人分离），不阻断安装
     
     # Layer 3: API
     if all_success and not pip_install_with_retry(python_path, layer3_api,
@@ -464,7 +494,7 @@ def install_pip_dependencies(env_prefix: str) -> bool:
         logger.section("安装 WhisperX (与 VideoLingo 父项目一致)")
         if pip_install_with_retry(python_path, [whisperx_pkg],
                                    f"从 Git 安装 WhisperX ({WHISPERX_COMMIT[:8]}...)",
-                                   timeout=900, use_cache=False):  # Git 安装不用缓存
+                                   timeout=900, use_cache=False):
             logger.success("WhisperX 安装成功!")
         else:
             logger.error("WhisperX 安装失败")
