@@ -80,6 +80,29 @@ pip wheel git+https://github.com/m-bain/whisperx.git@7307306 --no-cache-dir -w .
 pip install ./wheels/whisperx-*.whl
 ```
 
+### Option 4: International CDN Acceleration (Auto-Enabled)
+
+The installation script automatically uses multiple international CDNs to accelerate WhisperX git installation:
+
+**Supported CDNs:**
+- `ghps.cc` - GitHub proxy (global)
+- `ghproxy.net` - GitHub proxy (USA)
+- `github.moeyy.xyz` - Hong Kong node
+- `gh.api.99988866.xyz` - USA node
+
+**How it works:**
+1. Tries pre-compiled wheel first (if URL provided)
+2. Falls back to git installation with CDN acceleration
+3. Automatically retries failed CDNs
+4. Falls back to original GitHub as last resort
+
+**Custom CDN:**
+```bash
+# Set custom git URL for WhisperX
+export WHISPERX_GIT_URL="git+https://your-fast-mirror.com/m-bain/whisperx.git@7307306"
+python install_conda.py
+```
+
 ### Option 3: Jupyter Notebook (Colab/Kaggle)
 
 Open `WhisperX_Cloud_Unified.ipynb` in Google Colab or Kaggle and run all cells.
@@ -176,11 +199,12 @@ Dependencies are pinned to match VideoLingo parent project for compatibility:
 | Package | Version | Notes |
 |---------|---------|-------|
 | torch | 2.0.0 | Synced with VideoLingo |
-| whisperx | commit 7307306 | Pinned for stability (supports pre-compiled wheel) |
+| whisperx | commit 7307306 | Pinned for stability (CDN-accelerated git install) |
 | ctranslate2 | 4.4.0 | Required by whisperX |
 | transformers | 4.39.3 | HuggingFace models |
 | fastapi | 0.109.0 | API framework |
 | mamba | latest | 3-5x faster than conda |
+| **CDN Support** | - | Auto-enabled: ghps.cc, ghproxy.net, etc. |
 
 ## 🐛 Troubleshooting
 
@@ -199,6 +223,22 @@ python -c "import torch; print(torch.cuda.is_available())"
 ```bash
 # For China users, use mirror
 export HF_ENDPOINT=https://hf-mirror.com
+```
+
+### CDN Installation Failures
+
+The installation script automatically uses multiple international CDNs. If all fail:
+
+```bash
+# Use custom git mirror
+export WHISPERX_GIT_URL="git+https://your-fast-mirror.com/m-bain/whisperx.git@7307306"
+python install_conda.py
+```
+
+Or check network connectivity to CDNs:
+```bash
+curl -I https://ghps.cc
+curl -I https://ghproxy.net
 ```
 
 ### Out of Memory
