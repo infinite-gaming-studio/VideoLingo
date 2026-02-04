@@ -59,12 +59,13 @@ def convert_video_to_audio(video_file: str, output_audio: str) -> str:
 def test_health_check():
     """测试服务健康检查"""
     rprint("\n[bold cyan]=== 1. 健康检查 ===[/bold cyan]\n")
-    
+
     client = WhisperXCloudClient(CLOUD_URL)
-    
+
     try:
         health = client.health_check()
         rprint("[green]✅ 服务状态:[/green]")
+        rprint(f"   服务器版本: {health.get('server_version', 'unknown')}")
         rprint(f"   平台: {health.get('platform', 'unknown')}")
         rprint(f"   设备: {health.get('device', 'unknown')}")
         rprint(f"   GPU 内存: {health.get('gpu_memory_gb', 0):.2f} GB")
@@ -117,6 +118,7 @@ def test_transcribe_simple():
         )
         
         rprint("\n[green]✅ 转录成功![/green]")
+        rprint(f"   服务器版本: {result.get('server_version', 'unknown')}")
         rprint(f"   语言: {result.get('language', 'unknown')}")
         rprint(f"   处理时间: {result.get('processing_time', 0):.2f}s")
         rprint(f"   段落数: {len(result.get('segments', []))}")
@@ -187,6 +189,7 @@ def test_transcribe_with_api_function():
         )
         
         rprint("\n[green]✅ 转录成功![/green]")
+        rprint(f"   服务器版本: {result.get('server_version', 'unknown')}")
         rprint(f"   语言: {result.get('language', 'unknown')}")
         rprint(f"   段落数: {len(result.get('segments', []))}")
         
