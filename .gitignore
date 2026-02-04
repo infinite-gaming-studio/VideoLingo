@@ -168,6 +168,10 @@ batch/tasks_setting.xlsx
 AllinOne.ipynb
 config.backup.yaml
 
+# Demo and test files
+demo/
+/test/
+
 # runtime
 runtime/
 dev/
