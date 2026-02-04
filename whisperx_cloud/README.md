@@ -19,16 +19,30 @@ Standalone WhisperX ASR service for VideoLingo. Deploy on cloud GPU platforms (G
 
 ## 🚀 Installation
 
-### Option 1: Conda (Recommended for Local GPU Servers)
+### Option 1: Mamba/Conda (Recommended for Local GPU Servers)
 
-Conda provides better environment isolation and automatic CUDA dependency management.
+**Mamba** is recommended over Conda - it's 3-5x faster for dependency resolution and installation.
+
+#### Prerequisites - Install Mamba (Recommended)
 
 ```bash
-# Method 1: Using environment.yml
-conda env create -f environment.yml
-conda activate whisperx-cloud
+# Option A: Install Miniforge (includes Mamba) - RECOMMENDED
+wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+bash Miniforge3-Linux-x86_64.sh -b -p $HOME/miniforge3
+export PATH="$HOME/miniforge3/bin:$PATH"
 
-# Method 2: Using installation script
+# Option B: Install Mamba in existing Conda
+conda install -c conda-forge mamba -n base -y
+```
+
+#### Install WhisperX Cloud
+
+```bash
+# Method 1: Using environment.yml (auto-detects mamba/conda)
+mamba env create -f environment.yml  # or: conda env create -f environment.yml
+mamba activate whisperx-cloud        # or: conda activate whisperx-cloud
+
+# Method 2: Using installation script (auto-detects mamba/conda)
 python install_conda.py
 ```
 
@@ -41,6 +55,29 @@ pip install torch==2.0.0+cu118 torchaudio==2.0.0+cu118 \
 
 # Install other dependencies
 pip install -r requirements.txt
+```
+
+### Option 3: Using Pre-compiled WhisperX Wheel (Fastest)
+
+To avoid building WhisperX from source (which requires git and can be slow), you can use a pre-compiled wheel:
+
+```bash
+# Set environment variable to use custom wheel URL (optional)
+export WHISPERX_WHEEL_URL="https://your-cdn.com/whisperx-3.1.1-py3-none-any.whl"
+
+# Run installation - it will auto-detect and use pre-compiled wheel
+python install_conda.py
+```
+
+Or manually install the wheel:
+
+```bash
+# Download pre-built wheel
+pip install https://ghp.ci/https://github.com/user-attachments/files/whisperx-3.1.1-py3-none-any.whl
+
+# Or build wheel locally
+pip wheel git+https://github.com/m-bain/whisperx.git@7307306 --no-cache-dir -w ./wheels
+pip install ./wheels/whisperx-*.whl
 ```
 
 ### Option 3: Jupyter Notebook (Colab/Kaggle)
@@ -122,9 +159,10 @@ result = client.transcribe('audio.wav', language='zh')
 
 ```
 whisperx_cloud/
-├── environment.yml           # Conda environment configuration
-├── install_conda.py          # Conda installation script
+├── environment.yml           # Conda/Mamba environment configuration
+├── install_conda.py          # Mamba/Conda installation script
 ├── requirements.txt          # Pip dependencies with detailed comments
+├── step3_install_deps.py     # Automated installation with mamba + wheel support
 ├── whisperx_server.py        # FastAPI server implementation
 ├── whisperx_cloud_client.py  # Python client for VideoLingo
 ├── WhisperX_Cloud_Unified.ipynb  # Universal notebook for Colab/Kaggle
@@ -138,10 +176,11 @@ Dependencies are pinned to match VideoLingo parent project for compatibility:
 | Package | Version | Notes |
 |---------|---------|-------|
 | torch | 2.0.0 | Synced with VideoLingo |
-| whisperx | commit 7307306 | Pinned for stability |
+| whisperx | commit 7307306 | Pinned for stability (supports pre-compiled wheel) |
 | ctranslate2 | 4.4.0 | Required by whisperX |
 | transformers | 4.39.3 | HuggingFace models |
 | fastapi | 0.109.0 | API framework |
+| mamba | latest | 3-5x faster than conda |
 
 ## 🐛 Troubleshooting
 

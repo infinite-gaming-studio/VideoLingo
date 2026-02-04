@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-WhisperX Cloud API Server - Conda Installation Script
+WhisperX Cloud API Server - Mamba/Conda Installation Script
 Reference: VideoLingo/install.py
 
-This script provides guided installation for the WhisperX Cloud server using conda.
-It handles environment creation, PyTorch CUDA installation, and dependency setup.
+This script provides guided installation for the WhisperX Cloud server using mamba (preferred) or conda.
+Mamba is 3-5x faster for dependency resolution and installation.
 
 Usage:
     python install_conda.py
 
 Requirements:
-    - conda (Anaconda or Miniconda)
+    - mamba (recommended) or conda
     - NVIDIA GPU with CUDA support (recommended)
 """
 
@@ -48,19 +48,32 @@ def run_command(cmd, check=True, capture_output=False):
         return None
 
 
-def check_conda():
-    """Check if conda is installed"""
+def check_mamba():
+    """Check if mamba or conda is installed (prefer mamba)"""
+    # 优先检查 mamba
+    result = run_command("mamba --version", check=False, capture_output=True)
+    if result and result.returncode == 0:
+        print(f"✅ Mamba detected: {result.stdout.strip()}")
+        return 'mamba'
+    
+    # 检查 conda 作为备选
     result = run_command("conda --version", check=False, capture_output=True)
     if result and result.returncode == 0:
-        print(f"✅ Conda detected: {result.stdout.strip()}")
-        return True
-    else:
-        print("❌ Conda not found!")
-        print("\n📥 Please install Miniconda or Anaconda:")
-        print("   - Miniconda: https://docs.conda.io/en/latest/miniconda.html")
-        print("   - Anaconda: https://www.anaconda.com/download")
-        print("\n   After installation, restart your terminal and run this script again.")
-        return False
+        print(f"⚠️  Conda detected (recommend using Mamba for faster installation):")
+        print(f"   {result.stdout.strip()}")
+        print("\n   To install Mamba:")
+        print("   conda install -c conda-forge mamba -n base -y")
+        return 'conda'
+    
+    print("❌ Neither Mamba nor Conda found!")
+    print("\n📥 Please install Miniforge (includes Mamba):")
+    print("   wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh")
+    print("   bash Miniforge3-Linux-x86_64.sh -b -p $HOME/miniforge3")
+    print("   export PATH=\"$HOME/miniforge3/bin:$PATH\"")
+    print("\n   Or install Miniconda:")
+    print("   https://docs.conda.io/en/latest/miniconda.html")
+    print("\n   After installation, restart your terminal and run this script again.")
+    return None
 
 
 def check_nvidia_gpu():
@@ -81,24 +94,26 @@ def check_nvidia_gpu():
         return False
 
 
-def create_conda_env(env_name="whisperx-cloud", use_gpu=True):
-    """Create conda environment"""
-    print(f"\n📦 Creating conda environment: {env_name}")
+def create_env(cmd_type='mamba', env_name="whisperx-cloud", use_gpu=True):
+    """Create environment using mamba or conda"""
+    print(f"\n📦 Creating environment with {cmd_type}: {env_name}")
 
     # Determine Python version
     python_version = "3.10"
 
-    # Create environment command
-    cmd = f"conda create -n {env_name} python={python_version} -y"
+    # Create environment command (使用 mamba 或 conda)
+    cmd_tool = 'mamba' if cmd_type == 'mamba' else 'conda'
+    cmd = f"{cmd_tool} create -n {env_name} python={python_version} -y"
 
     print(f"   Python version: {python_version}")
+    print(f"   Using: {cmd_tool}")
     run_command(cmd)
 
     return env_name
 
 
-def install_pytorch(env_name, use_gpu=True):
-    """Install PyTorch with appropriate CUDA version"""
+def install_pytorch(cmd_type='mamba', env_name="whisperx-cloud", use_gpu=True):
+    """Install PyTorch with appropriate CUDA version using mamba or conda"""
     print("\n📦 Installing PyTorch...")
 
     # Detect CUDA version
@@ -115,19 +130,22 @@ def install_pytorch(env_name, use_gpu=True):
                         cuda_version = match.group(1)
                         break
 
+    cmd_tool = 'mamba' if cmd_type == 'mamba' else 'conda'
+    
     # Choose PyTorch installation command
     if use_gpu and cuda_version:
         # Use CUDA 11.8 for compatibility (works with CUDA 11.8 and 12.x)
         print(f"   Installing PyTorch with CUDA 11.8 support")
         print(f"   (Compatible with system CUDA {cuda_version})")
+        print(f"   Using: {cmd_tool} (faster dependency resolution)")
         cmd = (
-            f"conda run -n {env_name} conda install pytorch=2.0.0 "
+            f"conda run -n {env_name} {cmd_tool} install pytorch=2.0.0 "
             f"torchaudio=2.0.0 pytorch-cuda=11.8 -c pytorch -c nvidia -y"
         )
     else:
         print("   Installing CPU-only PyTorch")
         cmd = (
-            f"conda run -n {env_name} conda install pytorch=2.0.0 "
+            f"conda run -n {env_name} {cmd_tool} install pytorch=2.0.0 "
             f"torchaudio=2.0.0 cpuonly -c pytorch -y"
         )
 
@@ -167,7 +185,7 @@ def install_dependencies(env_name):
         run_command(cmd)
 
 
-def verify_installation(env_name):
+def verify_installation(cmd_type='mamba', env_name="whisperx-cloud"):
     """Verify the installation"""
     print("\n🔍 Verifying installation...")
 
@@ -206,16 +224,22 @@ if torch.cuda.is_available():
         print("   ✅ WhisperX imported successfully")
     else:
         print("   ⚠️  WhisperX import failed, will download on first run")
+    
+    # Check mamba/conda
+    print(f"   ✅ Package manager: {cmd_type}")
 
 
-def print_activation_instructions(env_name):
+def print_activation_instructions(cmd_type='mamba', env_name="whisperx-cloud"):
     """Print instructions for activating the environment"""
+    activate_cmd = 'conda' if cmd_type == 'conda' else 'conda'  # mamba 环境也用 conda activate
+    
     print("\n" + "=" * 60)
     print("✅ Installation Complete!")
+    print(f"   Package manager used: {cmd_type}")
     print("=" * 60)
     print("\n📋 Next Steps:")
     print(f"\n   1. Activate the environment:")
-    print(f"      conda activate {env_name}")
+    print(f"      {activate_cmd} activate {env_name}")
     print(f"\n   2. Start the server:")
     print(f"      python whisperx_server.py")
     print(f"\n   3. Or use the unified notebook:")
@@ -223,15 +247,17 @@ def print_activation_instructions(env_name):
     print(f"\n   4. For VideoLingo integration:")
     print(f"      - Set whisper.runtime = 'cloud' in config.yaml")
     print(f"      - Configure the cloud server URL")
-    print("\n" + "=" * 60)
+    print(f"\n💡 Tip: Mamba is 3-5x faster than conda for package operations")
+    print("=" * 60)
 
 
 def main():
     """Main installation flow"""
     print(ASCII_LOGO)
 
-    # Check conda
-    if not check_conda():
+    # Check mamba/conda
+    cmd_type = check_mamba()
+    if not cmd_type:
         sys.exit(1)
 
     # Check GPU
@@ -243,8 +269,9 @@ def main():
         env_name = "whisperx-cloud"
 
     # Check if environment already exists
+    cmd_tool = 'mamba' if cmd_type == 'mamba' else 'conda'
     result = run_command(
-        f"conda env list | grep {env_name}",
+        f"{cmd_tool} env list | grep {env_name}",
         check=False, capture_output=True
     )
     if result and env_name in result.stdout:
@@ -252,24 +279,24 @@ def main():
         choice = input("   Remove and recreate? [y/N]: ").strip().lower()
         if choice == 'y':
             print(f"   Removing existing environment...")
-            run_command(f"conda env remove -n {env_name} -y")
+            run_command(f"{cmd_tool} env remove -n {env_name} -y")
         else:
             print("   Using existing environment...")
 
-    # Create environment
-    create_conda_env(env_name, has_gpu)
+    # Create environment using mamba/conda
+    create_env(cmd_type, env_name, has_gpu)
 
     # Install PyTorch
-    install_pytorch(env_name, has_gpu)
+    install_pytorch(cmd_type, env_name, has_gpu)
 
     # Install other dependencies
     install_dependencies(env_name)
 
     # Verify
-    verify_installation(env_name)
+    verify_installation(cmd_type, env_name)
 
     # Print instructions
-    print_activation_instructions(env_name)
+    print_activation_instructions(cmd_type, env_name)
 
 
 if __name__ == "__main__":

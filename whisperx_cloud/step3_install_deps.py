@@ -229,20 +229,93 @@ def setup_environment_paths(server_env):
     return ENV_PREFIX
 
 
-def get_conda_cmd():
-    """获取或安装 conda"""
-    # 检查现有 conda
-    for cmd in ['conda', os.path.expanduser('~/miniconda3/bin/conda')]:
+def get_mamba_cmd():
+    """获取或安装 mamba (优先) 或 conda"""
+    # 检查现有 mamba (优先)
+    mamba_paths = [
+        'mamba',
+        os.path.expanduser('~/miniforge3/bin/mamba'),
+        os.path.expanduser('~/miniconda3/bin/mamba'),
+        os.path.expanduser('~/mambaforge/bin/mamba'),
+    ]
+    for cmd in mamba_paths:
         try:
             result = subprocess.run([cmd, '--version'], capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
-                logger.success(f"发现 Conda: {result.stdout.strip()}")
-                return cmd
+                logger.success(f"发现 Mamba: {result.stdout.strip()}")
+                return cmd, 'mamba'
         except:
             pass
     
-    # 安装 miniconda
-    logger.progress("安装 Miniconda...")
+    # 检查现有 conda (备选)
+    conda_paths = [
+        'conda',
+        os.path.expanduser('~/miniconda3/bin/conda'),
+        os.path.expanduser('~/anaconda3/bin/conda'),
+    ]
+    for cmd in conda_paths:
+        try:
+            result = subprocess.run([cmd, '--version'], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                logger.warning(f"发现 Conda (建议改用 Mamba): {result.stdout.strip()}")
+                return cmd, 'conda'
+        except:
+            pass
+    
+    # 安装 miniforge (包含 mamba)
+    logger.progress("安装 Miniforge (包含 Mamba)...")
+    install_path = os.path.expanduser("~/miniforge3")
+    
+    try:
+        logger.info("下载 Miniforge...")
+        # 使用国内镜像加速下载
+        urls = [
+            'https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh',
+            'https://ghp.ci/https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh',
+            'https://mirrors.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease/Miniforge3-Linux-x86_64.sh',
+        ]
+        
+        downloaded = False
+        for url in urls:
+            try:
+                subprocess.run(
+                    ['wget', '-q', '--show-progress', url, '-O', '/tmp/miniforge.sh'],
+                    check=True, timeout=120
+                )
+                downloaded = True
+                logger.success(f"下载成功: {url}")
+                break
+            except:
+                continue
+        
+        if not downloaded:
+            raise RuntimeError("所有下载源都失败")
+        
+        logger.info("运行安装程序...")
+        subprocess.run(
+            ['bash', '/tmp/miniforge.sh', '-b', '-p', install_path],
+            check=True, timeout=120
+        )
+        
+        if os.path.exists('/tmp/miniforge.sh'):
+            os.remove('/tmp/miniforge.sh')
+        
+        mamba_bin = f"{install_path}/bin/mamba"
+        if not os.path.exists(mamba_bin):
+            raise RuntimeError("Mamba 安装后未找到")
+        
+        os.environ['PATH'] = f"{install_path}/bin:" + os.environ.get('PATH', '')
+        logger.success("Miniforge (Mamba) 安装完成")
+        return mamba_bin, 'mamba'
+        
+    except Exception as e:
+        logger.error(f"Miniforge 安装失败: {e}")
+        logger.info("尝试安装 Miniconda 作为备选...")
+        return _install_miniconda_fallback()
+
+
+def _install_miniconda_fallback():
+    """备选：安装 Miniconda"""
     install_path = os.path.expanduser("~/miniconda3")
     
     try:
@@ -267,12 +340,20 @@ def get_conda_cmd():
         if not os.path.exists(conda_bin):
             raise RuntimeError("Conda 安装后未找到")
         
+        # 在 conda 环境中安装 mamba
+        logger.progress("在 Conda 中安装 Mamba...")
+        subprocess.run(
+            [conda_bin, 'install', '-n', 'base', '-c', 'conda-forge', 'mamba', '-y'],
+            check=True, timeout=300
+        )
+        
+        mamba_bin = f"{install_path}/bin/mamba"
         os.environ['PATH'] = f"{install_path}/bin:" + os.environ.get('PATH', '')
-        logger.success("Miniconda 安装完成")
-        return conda_bin
+        logger.success("Mamba 安装完成 (通过 Conda)")
+        return mamba_bin, 'mamba'
         
     except Exception as e:
-        logger.error(f"Miniconda 安装失败: {e}")
+        logger.error(f"Miniconda 安装也失败: {e}")
         raise
 
 
@@ -302,12 +383,108 @@ dependencies:
     logger.success("Created environment.yml (conda deps only)")
 
 
+def get_whisperx_wheel_url() -> str:
+    """获取预编译 WhisperX wheel 的 URL"""
+    # 预编译 wheel 仓库配置
+    # 用户可以设置环境变量指向自己的 CDN
+    wheel_sources = [
+        os.environ.get('WHISPERX_WHEEL_URL', ''),  # 用户自定义
+        'https://ghp.ci/https://github.com/user-attachments/files/whisperx-3.1.1-py3-none-any.whl',
+        'https://mirror.ghproxy.com/https://github.com/m-bain/whisperx/releases/download/v3.1.1/whisperx-3.1.1-py3-none-any.whl',
+    ]
+    
+    # 过滤空值
+    return [url for url in wheel_sources if url]
+
+
+def build_whisperx_wheel(python_path: str, output_dir: str = './wheels') -> str:
+    """本地预编译 WhisperX wheel"""
+    logger.progress("本地预编译 WhisperX wheel...")
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    try:
+        # 安装 wheel 构建工具
+        subprocess.run(
+            [python_path, '-m', 'pip', 'install', 'wheel', 'build'],
+            capture_output=True, timeout=60
+        )
+        
+        # 克隆并构建 wheel
+        whisperx_commit = '7307306a9d8dd0d261e588cc933322454f853853'
+        
+        # 使用 pip wheel 直接构建
+        result = subprocess.run(
+            [python_path, '-m', 'pip', 'wheel', 
+             f'git+https://github.com/m-bain/whisperx.git@{whisperx_commit}',
+             '--no-cache-dir', '-w', output_dir],
+            capture_output=True, text=True, timeout=600
+        )
+        
+        if result.returncode == 0:
+            # 查找生成的 wheel 文件
+            wheels = [f for f in os.listdir(output_dir) if f.startswith('whisperx') and f.endswith('.whl')]
+            if wheels:
+                wheel_path = os.path.join(output_dir, wheels[0])
+                logger.success(f"Wheel 构建成功: {wheel_path}")
+                return wheel_path
+        
+        logger.warning(f"Wheel 构建失败，将使用直接安装: {result.stderr}")
+        return ''
+        
+    except Exception as e:
+        logger.warning(f"Wheel 构建异常: {e}")
+        return ''
+
+
+def install_whisperx_from_wheel(python_path: str) -> bool:
+    """尝试从预编译 wheel 安装 WhisperX"""
+    logger.progress("尝试安装预编译 WhisperX wheel...")
+    
+    wheel_urls = get_whisperx_wheel_url()
+    
+    # 方法1: 尝试从 URL 下载安装
+    for url in wheel_urls:
+        if not url:
+            continue
+        logger.info(f"尝试从 {url} 下载...")
+        try:
+            result = subprocess.run(
+                [python_path, '-m', 'pip', 'install', '--no-cache-dir', url],
+                capture_output=True, text=True, timeout=300
+            )
+            if result.returncode == 0:
+                logger.success("WhisperX 预编译 wheel 安装成功!")
+                return True
+        except Exception as e:
+            logger.warning(f"从 {url} 安装失败: {e}")
+    
+    # 方法2: 本地构建 wheel
+    wheel_path = build_whisperx_wheel(python_path)
+    if wheel_path and os.path.exists(wheel_path):
+        try:
+            result = subprocess.run(
+                [python_path, '-m', 'pip', 'install', '--no-cache-dir', wheel_path],
+                capture_output=True, text=True, timeout=180
+            )
+            if result.returncode == 0:
+                logger.success("WhisperX 本地 wheel 安装成功!")
+                return True
+        except Exception as e:
+            logger.warning(f"本地 wheel 安装失败: {e}")
+    
+    # 方法3: 回退到直接 git 安装
+    logger.warning("预编译 wheel 不可用，回退到 git 安装...")
+    return False
+
+
 def install_pip_dependencies(env_prefix: str) -> bool:
     """单独安装 pip 依赖（解决 conda pip 子进程问题）"""
     logger.progress("安装 pip 依赖...")
     
     python_path = f"{env_prefix}/bin/python"
     
+    # 基础依赖（WhisperX 除外）
     pip_packages = [
         "fastapi==0.109.0",
         "uvicorn[standard]==0.27.0",
@@ -315,8 +492,6 @@ def install_pip_dependencies(env_prefix: str) -> bool:
         "pydantic==2.5.3",
         "requests",
         "pyngrok",
-        # WhisperX 最后安装
-        "git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853"
     ]
     
     for package in pip_packages:
@@ -332,12 +507,6 @@ def install_pip_dependencies(env_prefix: str) -> bool:
             if result.returncode != 0:
                 logger.error(f"安装失败: {package}")
                 logger.error(f"错误输出: {result.stderr}")
-                
-                # 如果是 WhisperX 失败，尝试单独安装其依赖
-                if 'whisperx' in package.lower():
-                    logger.warning("WhisperX 安装失败，尝试预装依赖...")
-                    return install_whisperx_with_deps(python_path)
-                
                 return False
             
             logger.success(f"安装成功: {package}")
@@ -349,7 +518,50 @@ def install_pip_dependencies(env_prefix: str) -> bool:
             logger.error(f"安装异常: {package} - {e}")
             return False
     
-    return True
+    # 安装 WhisperX（使用预编译 wheel 优先）
+    logger.info("安装 WhisperX (优先使用预编译 wheel)...")
+    
+    # 先安装 WhisperX 的依赖（避免从 git 构建时缺少依赖）
+    whisperx_deps = [
+        "numpy==1.26.4",
+        "faster-whisper==1.0.0",
+        "ctranslate2==4.4.0",
+        "transformers==4.39.3",
+        "librosa==0.10.2.post1",
+        "soundfile>=0.12.1",
+        "pandas==2.2.3",
+    ]
+    
+    for dep in whisperx_deps:
+        logger.info(f"预装依赖: {dep}")
+        subprocess.run(
+            [python_path, '-m', 'pip', 'install', '--no-cache-dir', dep],
+            capture_output=True, timeout=180
+        )
+    
+    # 尝试预编译 wheel 安装
+    if install_whisperx_from_wheel(python_path):
+        return True
+    
+    # 回退到 git 安装
+    logger.info("从 git 安装 WhisperX...")
+    try:
+        result = subprocess.run(
+            [python_path, '-m', 'pip', 'install', '--no-cache-dir',
+             'git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853'],
+            capture_output=True, text=True, timeout=600
+        )
+        
+        if result.returncode == 0:
+            logger.success("WhisperX git 安装成功")
+            return True
+        else:
+            logger.error(f"WhisperX 安装失败: {result.stderr}")
+            return install_whisperx_with_deps(python_path)
+            
+    except Exception as e:
+        logger.error(f"WhisperX 安装异常: {e}")
+        return install_whisperx_with_deps(python_path)
 
 
 def install_whisperx_with_deps(python_path: str) -> bool:
@@ -523,22 +735,23 @@ def install_dependencies():
         if not ok:
             raise RuntimeError("磁盘空间不足")
         
-        # 步骤 3: Conda
-        logger.section("Step 3: Conda 安装")
-        CONDA_CMD = get_conda_cmd()
+        # 步骤 3: Mamba/Conda
+        logger.section("Step 3: Mamba 安装")
+        CONDA_CMD, cmd_type = get_mamba_cmd()
         
-        # 接受 ToS
-        try:
-            for channel in ['main', 'r']:
-                subprocess.run(
-                    [CONDA_CMD, 'tos', 'accept', 
-                     '--override-channels',
-                     '--channel', f'https://repo.anaconda.com/pkgs/{channel}'],
-                    capture_output=True, timeout=10
-                )
-            logger.success("ToS 已接受")
-        except:
-            pass
+        # 接受 ToS (仅 conda 需要)
+        if cmd_type == 'conda':
+            try:
+                for channel in ['main', 'r']:
+                    subprocess.run(
+                        [CONDA_CMD, 'tos', 'accept', 
+                         '--override-channels',
+                         '--channel', f'https://repo.anaconda.com/pkgs/{channel}'],
+                        capture_output=True, timeout=10
+                    )
+                logger.success("ToS 已接受")
+            except:
+                pass
         
         # 步骤 4: 创建 conda 环境（仅基础包）
         logger.section("Step 4: Conda 环境创建")
@@ -549,9 +762,10 @@ def install_dependencies():
             logger.warning("环境已存在，删除重建...")
             shutil.rmtree(ENV_PREFIX, ignore_errors=True)
         
-        logger.progress("创建 conda 环境（仅基础包）...")
+        logger.progress(f"创建环境（使用 {cmd_type}）...")
         logger.info(f"目标路径: {ENV_PREFIX}")
         
+        # 使用 mamba 或 conda 创建环境
         process = subprocess.Popen(
             [CONDA_CMD, 'env', 'create', '-f', 'environment.yml',
              '--prefix', ENV_PREFIX, '--yes'],
