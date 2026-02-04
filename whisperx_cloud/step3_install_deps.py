@@ -402,10 +402,31 @@ def install_pip_dependencies(env_prefix: str) -> bool:
         logger.error(f"错误：Python 不在 conda 环境中！预期: {env_prefix}, 实际: {actual_python}")
         return False
     
-    # 显示 pip 版本（不升级）
+    # 显示 pip 版本并升级 pip/setuptools（避免构建 wheel 失败）
     result = subprocess.run([python_path, '-m', 'pip', '--version'], 
                           capture_output=True, text=True)
     logger.info(f"使用 pip: {result.stdout.strip()}")
+    
+    # 升级 pip/setuptools/wheel 以避免构建问题
+    logger.info("升级 pip/setuptools/wheel...")
+    subprocess.run([python_path, '-m', 'pip', 'install', '--upgrade', 
+                    'pip>=23.0', 'setuptools>=65.0', 'wheel', '-q'], 
+                   capture_output=True, timeout=120)
+    
+    # 验证 av (PyAV) 是否已由 conda 正确安装
+    logger.info("验证 conda 安装的 av (PyAV)...")
+    av_check = subprocess.run([python_path, '-c', 'import av; print(f"av {av.__version__}")'],
+                              capture_output=True, text=True)
+    if av_check.returncode == 0:
+        logger.success(f"✅ av (PyAV) 已安装: {av_check.stdout.strip()}")
+    else:
+        logger.warning("⚠️ av (PyAV) 未正确安装，尝试用 conda 重新安装...")
+        # 尝试用 conda 重新安装 av
+        import shutil
+        mamba_cmd = shutil.which('mamba') or f"{os.path.dirname(os.path.dirname(python_path))}/bin/mamba"
+        if os.path.exists(mamba_cmd):
+            subprocess.run([mamba_cmd, 'install', '-p', env_prefix, 'av>=10.0', '-y', '--force-reinstall'],
+                          capture_output=True, timeout=300)
     
     # ==================== 分层依赖定义 ====================
     # Layer 1: 底层 ML 基础设施
@@ -420,9 +441,13 @@ def install_pip_dependencies(env_prefix: str) -> bool:
     ]
     
     # Layer 2: ASR 引擎
-    layer2_asr = [
-        "faster-whisper==1.0.0",
+    # faster-whisper 依赖 av (PyAV)，但 av 已由 conda 安装
+    # 策略：先安装 faster-whisper 的其他依赖，然后用 --no-deps 安装 faster-whisper
+    layer2_asr_deps = [
+        "tokenizers>=0.13,<1.0",
+        "onnxruntime>=1.14,<2.0",
     ]
+    faster_whisper_pkg = "faster-whisper==1.0.0"
     
     # Layer 2b: pyannote.audio 的依赖（排除已由 conda 安装的包）
     # 这些依赖在安装 pyannote 前必须先装，然后用 --no-deps 装 pyannote
@@ -462,11 +487,18 @@ def install_pip_dependencies(env_prefix: str) -> bool:
         logger.error("ML 基础库安装失败")
         all_success = False
     
-    # Layer 2: faster-whisper
-    if all_success and not pip_install_with_retry(python_path, layer2_asr,
-                                                   "安装 faster-whisper", timeout=300, use_cache=True):
-        logger.error("faster-whisper 安装失败")
-        all_success = False
+    # Layer 2: faster-whisper（av 已由 conda 安装，使用 --no-deps 跳过 av 编译）
+    if all_success:
+        # 先安装 faster-whisper 的纯 Python 依赖
+        logger.info("安装 faster-whisper 的依赖（跳过 av，已由 conda 安装）...")
+        pip_install_with_retry(python_path, layer2_asr_deps,
+                               "安装 faster-whisper 依赖", timeout=180, use_cache=True)
+        
+        # 使用 --no-deps 安装 faster-whisper，避免 pip 尝试编译 av
+        if not pip_install_with_retry(python_path, [faster_whisper_pkg],
+                                       "安装 faster-whisper", timeout=300, use_cache=True, no_deps=True):
+            logger.error("faster-whisper 安装失败")
+            all_success = False
     
     # Layer 2b: pyannote.audio（方案A：先装依赖，再 --no-deps 装本体）
     if all_success:
