@@ -355,13 +355,19 @@ def pip_install_with_retry(python_path: str, packages: List[str], desc: str = ""
                 logger.success(f"  安装成功 ({elapsed:.1f}s)")
                 return True
             else:
-                err_msg = result.stderr[:400] if result.stderr else "未知错误"
-                logger.warning(f"  安装失败: {err_msg}")
+                # 详细错误输出（stdout 和 stderr 都可能包含错误信息）
+                err_msg = result.stderr[:800] if result.stderr else ""
+                out_msg = result.stdout[-800:] if result.stdout else ""
+                full_error = err_msg if err_msg else out_msg
+                if not full_error:
+                    full_error = "未知错误（无输出）"
+                logger.warning(f"  安装失败: {full_error}")
                 if attempt < MAX_RETRIES:
                     logger.info(f"  {RETRY_DELAY}秒后重试...")
                     time.sleep(RETRY_DELAY)
                 else:
                     logger.error(f"  已达最大重试次数，安装失败")
+                    logger.debug(f"  完整错误:\nstderr: {result.stderr}\nstdout: {result.stdout}")
                     return False
                     
         except subprocess.TimeoutExpired:
@@ -524,12 +530,61 @@ def install_pip_dependencies(env_prefix: str) -> bool:
     # Layer 4: WhisperX
     if all_success:
         logger.section("安装 WhisperX (与 VideoLingo 父项目一致)")
+        whisperx_installed = False
+        
+        # 方案 1: 直接 pip install from git (原始方式)
         if pip_install_with_retry(python_path, [whisperx_pkg],
                                    f"从 Git 安装 WhisperX ({WHISPERX_COMMIT[:8]}...)",
                                    timeout=900, use_cache=False):
             logger.success("WhisperX 安装成功!")
+            whisperx_installed = True
         else:
-            logger.error("WhisperX 安装失败")
+            logger.warning("直接 pip install 失败，尝试备选方案...")
+        
+        # 方案 2: 手动 clone + 本地安装（解决某些网络环境问题）
+        if not whisperx_installed:
+            logger.info("尝试本地克隆安装...")
+            clone_dir = "/tmp/whisperx_clone"
+            try:
+                # 清理旧目录
+                if os.path.exists(clone_dir):
+                    shutil.rmtree(clone_dir)
+                
+                # 手动克隆
+                clone_result = subprocess.run(
+                    ['git', 'clone', '--depth', '1', 
+                     f'https://github.com/m-bain/whisperx.git', clone_dir],
+                    capture_output=True, text=True, timeout=120
+                )
+                
+                if clone_result.returncode == 0:
+                    # 检出指定 commit
+                    checkout_result = subprocess.run(
+                        ['git', 'checkout', WHISPERX_COMMIT],
+                        cwd=clone_dir, capture_output=True, text=True, timeout=60
+                    )
+                    
+                    # 本地安装（使用 --no-deps 因为我们已经安装了依赖）
+                    if pip_install_with_retry(python_path, [clone_dir],
+                                               "本地安装 WhisperX", timeout=300, 
+                                               use_cache=False, no_deps=True):
+                        logger.success("WhisperX 本地安装成功!")
+                        whisperx_installed = True
+            except Exception as e:
+                logger.warning(f"本地克隆安装失败: {e}")
+        
+        # 方案 3: 使用 PyPI 版本作为最后备选（可能版本不完全一致）
+        if not whisperx_installed:
+            logger.warning("尝试 PyPI 版本作为备选...")
+            # PyPI 上的 whisperx 可能不是最新 commit，但作为备选可用
+            if pip_install_with_retry(python_path, ["whisperx==3.1.1"],
+                                       "从 PyPI 安装 WhisperX",
+                                       timeout=300, use_cache=False, no_deps=True):
+                logger.success("WhisperX (PyPI 版本) 安装成功!")
+                whisperx_installed = True
+        
+        if not whisperx_installed:
+            logger.error("WhisperX 所有安装方案均失败")
             all_success = False
     
     elapsed = time.time() - step_start
@@ -599,7 +654,21 @@ def verify_environment(env_prefix: str) -> bool:
             else:
                 logger.warning(f"  {pkg}: 导入失败")
                 if result.stderr:
-                    logger.debug(f"    错误: {result.stderr[:200]}")
+                    # 显示更详细的错误信息
+                    err_detail = result.stderr[:500] if len(result.stderr) > 500 else result.stderr
+                    logger.debug(f"    错误详情:\n{err_detail}")
+                    
+                    # 对 torch 的特殊诊断
+                    if pkg == 'torch' and ('cuda' in result.stderr.lower() or 'libcudart' in result.stderr.lower()):
+                        logger.warning("    提示: torch CUDA 库可能缺失，尝试修复...")
+                        # 尝试重新安装 cuda 运行时库
+                        fix_result = subprocess.run(
+                            [python_path, '-m', 'pip', 'install', '--force-reinstall', 
+                             'nvidia-cublas-cu11', 'nvidia-cuda-runtime-cu11', '-q'],
+                            capture_output=True, timeout=120
+                        )
+                        if fix_result.returncode == 0:
+                            logger.info("    已尝试修复 CUDA 库，请重新验证")
         except Exception as e:
             logger.warning(f"  {pkg}: 测试失败 - {e}")
     
