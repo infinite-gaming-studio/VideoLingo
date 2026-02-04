@@ -291,7 +291,8 @@ dependencies:
   - pytorch=2.0.0
   - torchaudio=2.0.0
   - pytorch-cuda=11.8
-  - ffmpeg
+  - ffmpeg  # conda-forge 版本支持 NVENC/NVDEC GPU 硬件加速
+  - av  # 通过 conda 安装 PyAV，避免编译
   - pip
 '''
     
@@ -355,10 +356,10 @@ def install_whisperx_with_deps(python_path: str) -> bool:
     """尝试预装 WhisperX 依赖后再安装"""
     logger.info("预装 WhisperX 依赖...")
     
-    # 先安装 known working 版本的依赖
+    # 注意：av 已通过 conda 安装，不需要 pip 安装
     pre_deps = [
-        "numpy==1.26.4",  # 固定版本避免兼容性问题
-        "av==10.0.0",  # 使用预编译版本而非源码编译
+        "numpy==1.26.4",
+        # "av==10.0.0",  # ← 跳过，conda 已安装
         "faster-whisper==1.0.0",
         "ctranslate2==4.4.0",
         "transformers==4.39.3",
@@ -455,6 +456,25 @@ def verify_environment(env_prefix: str) -> bool:
                 logger.warning(f"  {pkg}: 导入失败")
         except:
             logger.warning(f"  {pkg}: 测试超时")
+    
+    # 验证 ffmpeg GPU 支持
+    try:
+        ffmpeg_path = f"{env_prefix}/bin/ffmpeg"
+        if os.path.exists(ffmpeg_path):
+            result = subprocess.run(
+                [ffmpeg_path, '-hwaccels'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if 'cuda' in result.stdout.lower() or 'nvenc' in result.stdout.lower():
+                logger.success("  ffmpeg: 支持 NVIDIA GPU 加速 (cuda/nvenc)")
+            else:
+                logger.info("  ffmpeg: 已安装（GPU 加速支持需检查）")
+        else:
+            logger.warning("  ffmpeg: 未找到")
+    except:
+        logger.warning("  ffmpeg: 检测失败")
     
     return True
 
