@@ -56,6 +56,15 @@ model_cache = {}
 device = None
 compute_type = None
 
+def get_device():
+    """智能设备检测: CUDA -> MPS (Apple Silicon) -> CPU"""
+    if torch.cuda.is_available():
+        return "cuda", "float16" if torch.cuda.is_bf16_supported() else "int8"
+    elif torch.backends.mps.is_available():
+        return "mps", "float16"
+    else:
+        return "cpu", "int8"
+
 class TranscriptionRequest(BaseModel):
     language: Optional[str] = Field(default=None, description="Language code (e.g., 'en', 'zh', 'ja'). Auto-detect if not provided")
     model: str = Field(default="large-v3", description="Whisper model to use")
@@ -82,10 +91,11 @@ class HealthResponse(BaseModel):
     status: str
     device: str
     cuda_available: bool
+    mps_available: bool
     gpu_memory: Optional[float] = None
     models_loaded: list
     server_version: str = SERVER_VERSION
-    platform: str = "cuda" if torch.cuda.is_available() else "cpu"
+    platform: str
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -96,24 +106,27 @@ async def lifespan(app: FastAPI):
     print(f"📌 WhisperX Cloud Server v{SERVER_VERSION}")
     print(f"   With PyTorch weights_only patch for PyTorch 2.6+ compatibility\n")
 
-    # Detect device
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Detect device with MPS support
+    device, compute_type = get_device()
+    
     if device == "cuda":
         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-        compute_type = "float16" if torch.cuda.is_bf16_supported() else "int8"
-        print(f"🚀 Using GPU: {torch.cuda.get_device_name(0)}")
+        print(f"🚀 Using CUDA GPU: {torch.cuda.get_device_name(0)}")
         print(f"💾 GPU Memory: {gpu_mem:.2f} GB")
         print(f"⚙️ Compute type: {compute_type}")
+    elif device == "mps":
+        print(f"🍎 Using Apple Silicon MPS")
+        print(f"⚙️ Compute type: {compute_type}")
     else:
-        compute_type = "int8"
-        print("⚠️ CUDA not available, using CPU")
+        print("💻 Using CPU (no GPU detected)")
+        print(f"⚙️ Compute type: {compute_type}")
 
     yield
 
     # Cleanup
     print("Cleaning up models...")
     model_cache.clear()
-    if torch.cuda.is_available():
+    if device == "cuda":
         torch.cuda.empty_cache()
 
 app = FastAPI(
@@ -172,15 +185,25 @@ def process_audio(audio_bytes: bytes):
 async def health_check():
     """Health check endpoint"""
     gpu_mem = None
-    if torch.cuda.is_available():
+    cuda_avail = torch.cuda.is_available()
+    mps_avail = torch.backends.mps.is_available()
+    
+    if cuda_avail:
         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        platform_str = "cuda"
+    elif mps_avail:
+        platform_str = "mps"
+    else:
+        platform_str = "cpu"
     
     return HealthResponse(
         status="healthy",
         device=device,
-        cuda_available=torch.cuda.is_available(),
+        cuda_available=cuda_avail,
+        mps_available=mps_avail,
         gpu_memory=gpu_mem,
-        models_loaded=list(model_cache.keys())
+        models_loaded=list(model_cache.keys()),
+        platform=platform_str
     )
 
 @app.post("/transcribe", response_model=TranscriptionResponse)
@@ -203,13 +226,15 @@ async def transcribe(
     """
     start_time = time.time()
     
-    # Determine batch size
+    # Determine batch size based on device
     if batch_size is None:
         if device == "cuda":
             gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
             batch_size = 16 if gpu_mem > 8 else 4
+        elif device == "mps":
+            batch_size = 4  # MPS建议使用较小的batch_size
         else:
-            batch_size = 1
+            batch_size = 1  # CPU模式使用最小batch_size
     
     try:
         # Read audio file
@@ -244,7 +269,8 @@ async def transcribe(
             segments = result_aligned.get("segments", [])
             word_segments = result_aligned.get("word_segments", [])
             del align_model
-            torch.cuda.empty_cache()
+            if device == "cuda":
+                torch.cuda.empty_cache()
         
         # Speaker diarization
         speakers = None
@@ -277,7 +303,8 @@ async def transcribe(
         print(f"❌ Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        torch.cuda.empty_cache()
+        if device == "cuda":
+            torch.cuda.empty_cache()
 
 @app.post("/transcribe/base64")
 async def transcribe_base64(request: TranscriptionRequest):
@@ -296,7 +323,7 @@ async def clear_cache():
     """Clear model cache to free GPU memory"""
     global model_cache
     model_cache.clear()
-    if torch.cuda.is_available():
+    if device == "cuda":
         torch.cuda.empty_cache()
     return {"status": "Cache cleared"}
 
