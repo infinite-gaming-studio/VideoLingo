@@ -252,11 +252,9 @@ def get_mamba_cmd():
     
     try:
         logger.info("下载 Miniforge...")
-        # 使用国内镜像加速下载
         urls = [
+           # 原始 GitHub
             'https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh',
-            'https://ghp.ci/https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh',
-            'https://mirrors.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease/Miniforge3-Linux-x86_64.sh',
         ]
         
         downloaded = False
@@ -298,7 +296,16 @@ def get_mamba_cmd():
 
 
 def create_environment_yml():
-    """创建环境配置文件 - 优先使用 Mamba 安装依赖"""
+    """创建环境配置文件 - 与父项目 VideoLingo 保持一致
+    
+    父项目 VideoLingo 依赖版本 (requirements.txt):
+    - torch==2.0.0, torchaudio==2.0.0 (CUDA 11.8)
+    - numpy==1.26.4
+    - pandas==2.2.3
+    - transformers==4.39.3
+    - ctranslate2==4.4.0
+    - whisperx @ git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853
+    """
     environment_yml = '''name: whisperx-cloud
 channels:
   - pytorch
@@ -306,7 +313,8 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # ==================== Python & PyTorch ====================
+  # ==================== Python & PyTorch (与父项目一致) ====================
+  # VideoLingo 使用: torch==2.0.0, torchaudio==2.0.0, CUDA 11.8
   - python=3.10
   - pytorch=2.0.0
   - torchaudio=2.0.0
@@ -314,15 +322,16 @@ dependencies:
   
   # ==================== Audio Processing ====================
   - ffmpeg  # conda-forge 版本支持 NVENC/NVDEC GPU 硬件加速
-  - av  # PyAV 通过 conda 安装，避免编译
+  - av>=10.0  # PyAV 通过 conda 安装，避免编译
   - librosa=0.10.2
-  - pysoundfile>=0.12.1  # conda-forge 中包名为 pysoundfile
-  - numpy=1.26.4
+  - soundfile>=0.12.1
+  - numpy=1.26.4  # VideoLingo: numpy==1.26.4
   
-  # ==================== ML Dependencies ====================
+  # ==================== ML Dependencies (与父项目一致) ====================
   # 优先用 mamba 安装，避免 pip 编译
-  - transformers>=4.39.0  # conda-forge 版本命名
-  - pandas>=2.2.0
+  - transformers=4.39.3  # VideoLingo: transformers==4.39.3
+  - pandas=2.2.3  # VideoLingo: pandas==2.2.3
+  - ctranslate2=4.4.0  # VideoLingo: ctranslate2==4.4.0
   - pip
   
   # ==================== Build Tools ====================
@@ -330,126 +339,70 @@ dependencies:
   - setuptools
   - wheel
   - cython
+  
+  # ==================== WhisperX Dependencies ====================
+  # 预先安装 whisperx 的依赖，避免 pip 编译问题
+  - pyannote.audio=3.1.1  # 与 faster-whisper 兼容的版本
+  - huggingface-hub
+  - tqdm
+  - more-itertools
+  - nltk
+  
+  # ==================== Platform Specific ====================
+  # triton 仅 Linux x86_64
+  - triton  # [linux-64]
 '''
     
     with open('environment.yml', 'w') as f:
         f.write(environment_yml)
     
-    logger.success("Created environment.yml (Mamba 优先)")
+    logger.success("Created environment.yml (与 VideoLingo 父项目配置一致)")
 
 
-def install_whisperx_direct(python_path: str) -> bool:
-    """直接从 GitHub 安装 WhisperX（带重试和镜像支持）"""
-    logger.progress("安装 WhisperX (从 GitHub 直接安装)...")
+def install_whisperx(python_path: str) -> bool:
+    """安装 WhisperX（与父项目 VideoLingo 保持一致）
     
-    whisperx_commit = '7307306a9d8dd0d261e588cc933322454f853853'
+    父项目 VideoLingo 使用固定 commit 安装:
+    whisperx @ git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853
+    """
+    logger.progress("安装 WhisperX (与 VideoLingo 父项目一致)...")
     
-    # 使用多个镜像源尝试
-    git_urls = [
-        # 原始 GitHub
-        f'git+https://github.com/m-bain/whisperx.git@{whisperx_commit}',
-        # GitHub 代理镜像
-        f'git+https://ghp.ci/https://github.com/m-bain/whisperx.git@{whisperx_commit}',
-        f'git+https://ghproxy.com/https://github.com/m-bain/whisperx.git@{whisperx_commit}',
-        f'git+https://mirror.ghproxy.com/https://github.com/m-bain/whisperx.git@{whisperx_commit}',
-    ]
+    # 与父项目一致的 commit
+    WHISPERX_COMMIT = '7307306a9d8dd0d261e588cc933322454f853853'
+    WHISPERX_URL = f'git+https://github.com/m-bain/whisperx.git@{WHISPERX_COMMIT}'
     
     # 先升级 pip 和构建工具
     logger.info("升级 pip 和构建工具...")
     subprocess.run(
-        [python_path, '-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel', 'Cython'],
+        [python_path, '-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel'],
         capture_output=True, timeout=60
     )
     
-    for git_url in git_urls:
-        logger.info(f"尝试: {git_url[:60]}...")
-        try:
-            result = subprocess.run(
-                [python_path, '-m', 'pip', 'install', '--no-cache-dir', git_url],
-                capture_output=True, text=True, timeout=600
-            )
-            if result.returncode == 0:
-                logger.success("WhisperX 安装成功!")
-                return True
-            else:
-                logger.warning(f"该源失败，尝试下一个...")
-                logger.debug(f"错误: {result.stderr[:300]}")
-        except subprocess.TimeoutExpired:
-            logger.warning("安装超时，尝试下一个源...")
-        except Exception as e:
-            logger.warning(f"安装异常: {e}")
-    
-    logger.error("所有 GitHub 源都失败")
-    return False
-
-
-def install_whisperx_from_clone(python_path: str) -> bool:
-    """备用方案：先克隆到本地再安装"""
-    logger.progress("尝试本地克隆安装...")
-    
-    import tempfile
-    import shutil
-    
-    whisperx_commit = '7307306a9d8dd0d261e588cc933322454f853853'
-    clone_urls = [
-        'https://github.com/m-bain/whisperx.git',
-        'https://ghp.ci/https://github.com/m-bain/whisperx.git',
-        'https://ghproxy.com/https://github.com/m-bain/whisperx.git',
-    ]
-    
-    temp_dir = tempfile.mkdtemp(prefix='whisperx_clone_')
+    # 安装与父项目一致版本的依赖（防止版本冲突）
+    logger.info("安装 faster-whisper (与 VideoLingo 兼容版本)...")
+    subprocess.run(
+        [python_path, '-m', 'pip', 'install', '--no-cache-dir', 'faster-whisper==0.10.1'],
+        capture_output=True, timeout=180
+    )
     
     try:
-        # 尝试克隆
-        cloned = False
-        for url in clone_urls:
-            logger.info(f"克隆: {url}")
-            result = subprocess.run(
-                ['git', 'clone', '--depth', '1', url, temp_dir],
-                capture_output=True, text=True, timeout=120
-            )
-            if result.returncode == 0:
-                cloned = True
-                logger.success("克隆成功")
-                break
-            else:
-                logger.warning(f"克隆失败，尝试下一个...")
-        
-        if not cloned:
-            logger.error("所有克隆源都失败")
-            return False
-        
-        # 切换到指定 commit
-        subprocess.run(
-            ['git', '-C', temp_dir, 'fetch', '--depth', '1', 'origin', whisperx_commit],
-            capture_output=True, timeout=60
-        )
-        subprocess.run(
-            ['git', '-C', temp_dir, 'checkout', whisperx_commit],
-            capture_output=True, timeout=30
-        )
-        
-        # 本地安装
-        logger.info("本地安装...")
+        logger.info(f"从 GitHub 安装 WhisperX (commit: {WHISPERX_COMMIT[:8]}...)...")
         result = subprocess.run(
-            [python_path, '-m', 'pip', 'install', '--no-cache-dir', temp_dir],
+            [python_path, '-m', 'pip', 'install', '--no-cache-dir', WHISPERX_URL],
             capture_output=True, text=True, timeout=600
         )
-        
         if result.returncode == 0:
-            logger.success("WhisperX 本地安装成功!")
+            logger.success("WhisperX 安装成功!")
             return True
         else:
-            logger.error(f"本地安装失败: {result.stderr[:500]}")
+            logger.error(f"WhisperX 安装失败: {result.stderr[:500]}")
             return False
-            
     except Exception as e:
-        logger.error(f"本地安装异常: {e}")
+        logger.error(f"WhisperX 安装异常: {e}")
         return False
-    finally:
-        # 清理临时目录
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+
 
 
 def install_pip_dependencies(env_prefix: str) -> bool:
@@ -468,50 +421,34 @@ def install_pip_dependencies(env_prefix: str) -> bool:
     subprocess.run([python_path, '-m', 'pip', 'install', '--upgrade', 'pip'], 
                   capture_output=True, timeout=60)
     
-    # API 框架依赖（这些没有 conda 包或版本太旧）
-    pip_packages = [
+    # 安装 API 框架和工具依赖（这些没有 conda 包或版本太旧）
+    logger.info("安装 API 框架和工具依赖...")
+    api_deps = [
         "fastapi==0.109.0",
         "uvicorn[standard]==0.27.0",
         "python-multipart==0.0.6",
         "pydantic==2.5.3",
-        "requests",
         "pyngrok",
+        "docopt",  # WhisperX CLI 需要
     ]
     
-    for package in pip_packages:
-        logger.info(f"pip 安装: {package}")
+    for dep in api_deps:
+        logger.info(f"pip 安装: {dep}")
         try:
             result = subprocess.run(
-                [python_path, '-m', 'pip', 'install', '--no-cache-dir', package],
+                [python_path, '-m', 'pip', 'install', '--no-cache-dir', dep],
                 capture_output=True, text=True, timeout=300
             )
             if result.returncode != 0:
-                logger.warning(f"pip 安装失败: {package}，但继续...")
+                logger.warning(f"pip 安装失败: {dep}，但继续...")
             else:
-                logger.success(f"pip 安装成功: {package}")
+                logger.success(f"pip 安装成功: {dep}")
         except Exception as e:
-            logger.warning(f"pip 安装异常: {package} - {e}")
+            logger.warning(f"pip 安装异常: {dep} - {e}")
     
-    # 安装 WhisperX 特有的依赖（不能用 Mamba 安装的）
-    logger.info("安装 WhisperX 特有依赖...")
-    whisperx_deps = [
-        "faster-whisper==1.0.0",
-        "ctranslate2==4.4.0",
-    ]
-    
-    for dep in whisperx_deps:
-        logger.info(f"pip 安装: {dep}")
-        subprocess.run([python_path, '-m', 'pip', 'install', '--no-cache-dir', dep],
-                      capture_output=True, timeout=180)
-    
-    # 在 Conda 环境中从 GitHub 安装 WhisperX
+    # 安装 WhisperX（与父项目 VideoLingo 一致）
     logger.section("在 Conda 环境中安装 WhisperX")
-    if install_whisperx_direct(python_path):
-        return True
-    
-    # 失败后尝试本地克隆安装
-    logger.warning("直接安装失败，尝试备用方案...")
-    return install_whisperx_from_clone(python_path)
+    return install_whisperx(python_path)
 
 
 def verify_environment(env_prefix: str) -> bool:
@@ -558,21 +495,23 @@ def verify_environment(env_prefix: str) -> bool:
         return False
     
     # 验证关键包
-    test_imports = ['torch', 'fastapi']
+    test_imports = ['torch', 'fastapi', 'whisperx']
     for pkg in test_imports:
         try:
             result = subprocess.run(
                 [python_path, '-c', f'import {pkg}; print({pkg}.__version__)'],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=60
             )
             if result.returncode == 0:
                 logger.success(f"  {pkg}: {result.stdout.strip()}")
             else:
                 logger.warning(f"  {pkg}: 导入失败")
-        except:
-            logger.warning(f"  {pkg}: 测试超时")
+                if result.stderr:
+                    logger.debug(f"    错误: {result.stderr[:200]}")
+        except Exception as e:
+            logger.warning(f"  {pkg}: 测试失败 - {e}")
     
     # 验证 ffmpeg GPU 支持
     try:
