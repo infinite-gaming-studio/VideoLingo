@@ -5,6 +5,9 @@ Compatible with VideoLingo project
 """
 
 import os
+# Set matplotlib backend to Agg before importing any matplotlib-dependent libraries
+os.environ['MPLBACKEND'] = 'Agg'
+
 import io
 import base64
 import tempfile
