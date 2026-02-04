@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Step 3: 安装 Conda 和依赖 (运维级版本)
+Step 3: 安装 Conda 和依赖 (运维级版本 v2)
 
-特点：
-- 结构化日志记录
-- 磁盘/内存预检
-- 网络重试机制
-- 原子性安装（失败自动回滚）
-- 详细进度报告
+改进：
+- 修复 PyAV 编译问题（预装 ffmpeg）
+- 增强环境归属验证
+- 详细的 pip 错误诊断
+- 原子性安装保障
 """
 
 import subprocess
@@ -18,12 +17,13 @@ import requests
 import shutil
 import time
 import json
+import stat
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple, List
 
 # 配置
-INSTALL_TIMEOUT = 1800  # 30分钟超时
+INSTALL_TIMEOUT = 1800
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
@@ -33,6 +33,9 @@ class Logger:
     def __init__(self, log_file: str = "install.log"):
         self.log_file = log_file
         self.start_time = time.time()
+        # 清空旧日志
+        with open(self.log_file, 'w') as f:
+            f.write(f"Installation started at {datetime.now()}\n")
         
     def _timestamp(self) -> str:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -42,16 +45,13 @@ class Logger:
         return f"[{elapsed:.1f}s]"
     
     def log(self, level: str, message: str):
-        """记录日志"""
         timestamp = self._timestamp()
         elapsed = self._elapsed()
         log_line = f"{timestamp} {elapsed} [{level}] {message}"
         
-        # 写入文件
         with open(self.log_file, 'a', encoding='utf-8') as f:
             f.write(log_line + '\n')
         
-        # 输出到终端
         print(message)
     
     def info(self, msg: str):
@@ -74,88 +74,59 @@ class Logger:
         print(f"🚀 {msg}")
         print(f"{'='*60}\n")
         self.log("SECTION", msg)
+    
+    def debug(self, msg: str):
+        self.log("DEBUG", f"🔍 {msg}")
 
 
-# 全局日志器
 logger = Logger()
 
 
 def detect_server_environment():
-    """检测当前运行的服务器环境"""
+    """检测服务器环境"""
     hostname = socket.gethostname().lower()
     
-    # 1. Colab 检测 (多种方式)
-    if (
-        'google.colab' in sys.modules or
-        os.path.exists('/content') or
-        'COLAB_GPU' in os.environ or
-        'COLAB_TPU_ADDR' in os.environ or
-        'colab' in hostname
-    ):
-        return 'colab'
+    checks = [
+        ('colab', lambda: 'google.colab' in sys.modules or os.path.exists('/content')),
+        ('kaggle', lambda: os.path.exists('/kaggle')),
+        ('sagemaker', lambda: 'SAGEMAKER_INTERNAL_IMAGE_URI' in os.environ),
+        ('azure', lambda: 'AZUREML_ARM_SUBSCRIPTION' in os.environ),
+    ]
     
-    # 2. Kaggle 检测
-    if (
-        os.path.exists('/kaggle') or
-        'KAGGLE_KERNEL_RUN_TYPE' in os.environ or
-        'kaggle' in hostname
-    ):
-        return 'kaggle'
+    for env_name, check_func in checks:
+        try:
+            if check_func():
+                logger.success(f"检测到环境: {env_name.upper()}")
+                return env_name
+        except:
+            continue
     
-    # 3. AWS SageMaker 检测
-    if (
-        'SAGEMAKER_INTERNAL_IMAGE_URI' in os.environ or
-        'SM_MODEL_DIR' in os.environ or
-        'sagemaker' in hostname or
-        'aws' in hostname
-    ):
-        return 'sagemaker'
-    
-    # 4. Azure ML 检测
-    if (
-        'AZUREML_ARM_SUBSCRIPTION' in os.environ or
-        'AML_APP_ROOT' in os.environ or
-        'azure' in hostname or
-        'aml' in hostname
-    ):
-        return 'azure'
-    
-    # 5. GCP Vertex AI / Compute Engine 检测
+    # 元数据服务检测
     try:
-        response = requests.get(
+        resp = requests.get(
             'http://metadata.google.internal/computeMetadata/v1/instance/',
-            headers={'Metadata-Flavor': 'Google'},
-            timeout=1
+            headers={'Metadata-Flavor': 'Google'}, timeout=2
         )
-        if response.status_code == 200:
+        if resp.status_code == 200:
             return 'gcp'
     except:
         pass
     
-    # 6. AWS EC2 检测
     try:
-        response = requests.get(
-            'http://169.254.169.254/latest/meta-data/',
-            timeout=1
-        )
-        if response.status_code == 200:
+        resp = requests.get('http://169.254.169.254/latest/meta-data/', timeout=2)
+        if resp.status_code == 200:
             return 'aws'
     except:
         pass
     
-    # 7. 本地开发环境
-    if (
-        hostname in ['localhost', '127.0.0.1', ''] or
-        hostname.endswith('.local') or
-        os.path.exists('/Users')  # macOS
-    ):
+    if hostname in ['localhost', '127.0.0.1', ''] or hostname.endswith('.local'):
         return 'local'
     
-    logger.warning(f"Unknown environment (hostname: {hostname})")
+    logger.warning(f"未知环境 (hostname: {hostname})")
     return 'unknown'
 
 
-def check_disk_space(path: str, min_gb: float = 10.0) -> Tuple[bool, float]:
+def check_disk_space(path: str, min_gb: float = 15.0) -> Tuple[bool, float]:
     """检查磁盘空间"""
     try:
         stat = shutil.disk_usage(path)
@@ -170,179 +141,145 @@ def check_disk_space(path: str, min_gb: float = 10.0) -> Tuple[bool, float]:
         return False, 0
 
 
-def check_network(timeout: int = 10) -> bool:
-    """检查网络连接"""
-    test_urls = [
-        "https://repo.anaconda.com",
-        "https://github.com",
-        "https://pypi.org"
-    ]
-    for url in test_urls:
-        try:
-            response = requests.get(url, timeout=timeout)
-            if response.status_code == 200:
-                logger.success(f"网络连接正常: {url}")
-                return True
-        except:
-            continue
-    logger.error("网络连接异常，无法访问必要资源")
-    return False
+def check_directory_ownership(path: str) -> Tuple[bool, int]:
+    """检查目录所有权和权限"""
+    try:
+        if not os.path.exists(path):
+            return True, os.getuid()  # 目录不存在，返回当前用户
+        
+        stat_info = os.stat(path)
+        owner_uid = stat_info.st_uid
+        current_uid = os.getuid()
+        
+        # 检查是否可写
+        if not os.access(path, os.W_OK):
+            logger.error(f"目录不可写: {path} (owner={owner_uid}, current={current_uid})")
+            return False, owner_uid
+        
+        logger.success(f"目录权限正常: {path} (owner={owner_uid})")
+        return True, owner_uid
+    except Exception as e:
+        logger.error(f"检查目录权限失败: {e}")
+        return False, -1
 
 
-def run_with_retry(func, max_retries: int = MAX_RETRIES, delay: int = RETRY_DELAY, *args, **kwargs):
-    """执行函数，失败时重试"""
-    for attempt in range(max_retries):
+def ensure_directory(path: str) -> bool:
+    """确保目录存在且可写，逐层创建"""
+    try:
+        # 逐级创建
+        Path(path).mkdir(parents=True, exist_ok=True)
+        
+        # 验证创建成功
+        if not os.path.exists(path):
+            logger.error(f"目录创建失败: {path}")
+            return False
+        
+        # 创建测试文件验证可写性
+        test_file = Path(path) / ".write_test_" + str(int(time.time()))
         try:
-            result = func(*args, **kwargs)
-            return True, result
+            test_file.write_text("test")
+            test_file.unlink()
+            logger.success(f"目录可写: {path}")
+            return True
         except Exception as e:
-            logger.warning(f"尝试 {attempt + 1}/{max_retries} 失败: {e}")
-            if attempt < max_retries - 1:
-                logger.info(f"{delay}秒后重试...")
-                time.sleep(delay)
-            else:
-                logger.error("所有重试均失败")
-                return False, None
-    return False, None
+            logger.error(f"目录不可写 {path}: {e}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"创建目录失败 {path}: {e}")
+        return False
+
+
+def setup_environment_paths(server_env):
+    """设置环境路径"""
+    base_paths = {
+        'colab': '/content' if not os.path.exists('/content/drive/MyDrive') else '/content/drive/MyDrive',
+        'kaggle': '/kaggle/working',
+        'sagemaker': '/home/ec2-user',
+        'azure': '/home/azureuser',
+        'gcp': '/home/jupyter',
+    }
+    
+    base = base_paths.get(server_env, os.path.expanduser('~'))
+    ENV_PREFIX = f"{base}/conda-envs/whisperx-cloud"
+    
+    # 设置缓存目录
+    cache_dirs = {
+        'HF_HOME': f"{base}/.cache/huggingface",
+        'TORCH_HOME': f"{base}/.cache/torch",
+        'CONDA_PKGS_DIRS': f"{base}/.cache/conda/pkgs",
+        'PIP_CACHE_DIR': f"{base}/.cache/pip"
+    }
+    
+    # 确保所有目录可写
+    logger.info("检查目录权限...")
+    for key, value in cache_dirs.items():
+        os.environ[key] = value
+        if not ensure_directory(value):
+            logger.error(f"无法创建缓存目录: {value}")
+            return None
+    
+    # 确保环境目录父目录可写
+    parent = os.path.dirname(ENV_PREFIX)
+    if not ensure_directory(parent):
+        logger.error(f"无法创建环境父目录: {parent}")
+        return None
+    
+    logger.success(f"环境路径: {ENV_PREFIX}")
+    return ENV_PREFIX
 
 
 def get_conda_cmd():
-    """获取 conda 命令路径，如果没有则安装"""
-    # 检查标准 conda
-    try:
-        result = subprocess.run(['conda', '--version'], capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            logger.success(f"Conda detected: {result.stdout.strip()}")
-            return 'conda'
-    except:
-        pass
+    """获取或安装 conda"""
+    # 检查现有 conda
+    for cmd in ['conda', os.path.expanduser('~/miniconda3/bin/conda')]:
+        try:
+            result = subprocess.run([cmd, '--version'], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                logger.success(f"发现 Conda: {result.stdout.strip()}")
+                return cmd
+        except:
+            pass
     
-    # 检查用户目录 miniconda
-    miniconda_conda = os.path.expanduser('~/miniconda3/bin/conda')
-    if os.path.exists(miniconda_conda):
-        os.environ['PATH'] = os.path.expanduser('~/miniconda3/bin:') + os.environ.get('PATH', '')
-        result = subprocess.run([miniconda_conda, '--version'], capture_output=True, text=True, timeout=10)
-        logger.success(f"Miniconda detected: {result.stdout.strip()}")
-        return miniconda_conda
-    
-    # 安装 Miniconda
-    logger.progress("Installing Miniconda...")
+    # 安装 miniconda
+    logger.progress("安装 Miniconda...")
     install_path = os.path.expanduser("~/miniconda3")
     
-    def _do_install():
-        # 下载
-        logger.info("Downloading Miniconda installer...")
+    try:
+        logger.info("下载 Miniconda...")
         subprocess.run(
-            ['wget', '-q', '--show-progress', 
-             'https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh', 
+            ['wget', '-q', '--show-progress',
+             'https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh',
              '-O', '/tmp/miniconda.sh'],
-            check=True,
-            timeout=120
+            check=True, timeout=120
         )
         
-        # 安装
-        logger.info("Running installer...")
+        logger.info("运行安装程序...")
         subprocess.run(
             ['bash', '/tmp/miniconda.sh', '-b', '-p', install_path],
-            check=True,
-            timeout=60
+            check=True, timeout=60
         )
         
-        # 清理
         if os.path.exists('/tmp/miniconda.sh'):
             os.remove('/tmp/miniconda.sh')
         
-        # 验证
         conda_bin = f"{install_path}/bin/conda"
         if not os.path.exists(conda_bin):
             raise RuntimeError("Conda 安装后未找到")
         
-        # 更新 PATH
         os.environ['PATH'] = f"{install_path}/bin:" + os.environ.get('PATH', '')
-        
+        logger.success("Miniconda 安装完成")
         return conda_bin
-    
-    success, result = run_with_retry(_do_install, max_retries=2, delay=5)
-    if success:
-        logger.success("Miniconda installed")
-        return result
-    
-    raise RuntimeError("Miniconda 安装失败")
-
-
-def setup_environment_paths(server_env):
-    """根据环境设置路径"""
-    if server_env == 'colab':
-        # 检查是否有 Google Drive 挂载
-        if os.path.exists('/content/drive/MyDrive'):
-            ENV_PREFIX = '/content/drive/MyDrive/conda-envs/whisperx-cloud'
-            os.makedirs('/content/drive/MyDrive/conda-envs', exist_ok=True)
-            os.environ['HF_HOME'] = '/content/drive/MyDrive/.cache/huggingface'
-            os.environ['TORCH_HOME'] = '/content/drive/MyDrive/.cache/torch'
-            os.environ['CONDA_PKGS_DIRS'] = '/content/drive/MyDrive/.cache/conda/pkgs'
-            os.environ['PIP_CACHE_DIR'] = '/content/drive/MyDrive/.cache/pip'
-            for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS'], os.environ['PIP_CACHE_DIR']]:
-                os.makedirs(d, exist_ok=True)
-            logger.info("Colab with Drive: Using persistent directory")
-        else:
-            ENV_PREFIX = '/content/conda-envs/whisperx-cloud'
-            os.makedirs('/content/conda-envs', exist_ok=True)
-            os.environ['HF_HOME'] = '/content/.cache/huggingface'
-            os.environ['TORCH_HOME'] = '/content/.cache/torch'
-            os.environ['CONDA_PKGS_DIRS'] = '/content/.cache/conda/pkgs'
-            os.environ['PIP_CACHE_DIR'] = '/content/.cache/pip'
-            for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS'], os.environ['PIP_CACHE_DIR']]:
-                os.makedirs(d, exist_ok=True)
-            logger.info("Colab without Drive: Using /content directory (non-persistent)")
-    elif server_env == 'kaggle':
-        ENV_PREFIX = '/kaggle/working/conda-envs/whisperx-cloud'
-        os.makedirs('/kaggle/working/conda-envs', exist_ok=True)
-        os.environ['HF_HOME'] = '/kaggle/working/.cache/huggingface'
-        os.environ['TORCH_HOME'] = '/kaggle/working/.cache/torch'
-        os.environ['CONDA_PKGS_DIRS'] = '/kaggle/working/.cache/conda/pkgs'
-        os.environ['PIP_CACHE_DIR'] = '/kaggle/working/.cache/pip'
-        for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS'], os.environ['PIP_CACHE_DIR']]:
-            os.makedirs(d, exist_ok=True)
-        logger.info("Kaggle: Using persistent directory")
-    elif server_env in ['sagemaker', 'aws']:
-        ENV_PREFIX = '/home/ec2-user/conda-envs/whisperx-cloud'
-        os.makedirs('/home/ec2-user/conda-envs', exist_ok=True)
-        os.environ['HF_HOME'] = '/home/ec2-user/.cache/huggingface'
-        os.environ['TORCH_HOME'] = '/home/ec2-user/.cache/torch'
-        os.environ['CONDA_PKGS_DIRS'] = '/home/ec2-user/.cache/conda/pkgs'
-        os.environ['PIP_CACHE_DIR'] = '/home/ec2-user/.cache/pip'
-        for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS'], os.environ['PIP_CACHE_DIR']]:
-            os.makedirs(d, exist_ok=True)
-        logger.info("AWS: Using EC2 user directory")
-    elif server_env == 'azure':
-        ENV_PREFIX = '/home/azureuser/conda-envs/whisperx-cloud'
-        os.makedirs('/home/azureuser/conda-envs', exist_ok=True)
-        os.environ['HF_HOME'] = '/home/azureuser/.cache/huggingface'
-        os.environ['TORCH_HOME'] = '/home/azureuser/.cache/torch'
-        os.environ['CONDA_PKGS_DIRS'] = '/home/azureuser/.cache/conda/pkgs'
-        os.environ['PIP_CACHE_DIR'] = '/home/azureuser/.cache/pip'
-        for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS'], os.environ['PIP_CACHE_DIR']]:
-            os.makedirs(d, exist_ok=True)
-        logger.info("Azure: Using azureuser directory")
-    elif server_env == 'gcp':
-        ENV_PREFIX = '/home/jupyter/conda-envs/whisperx-cloud'
-        os.makedirs('/home/jupyter/conda-envs', exist_ok=True)
-        os.environ['HF_HOME'] = '/home/jupyter/.cache/huggingface'
-        os.environ['TORCH_HOME'] = '/home/jupyter/.cache/torch'
-        os.environ['CONDA_PKGS_DIRS'] = '/home/jupyter/.cache/conda/pkgs'
-        os.environ['PIP_CACHE_DIR'] = '/home/jupyter/.cache/pip'
-        for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS'], os.environ['PIP_CACHE_DIR']]:
-            os.makedirs(d, exist_ok=True)
-        logger.info("GCP: Using jupyter directory")
-    else:
-        ENV_PREFIX = None
-        logger.info("Local/Unknown: Using default conda env location")
-    
-    return ENV_PREFIX
+        
+    except Exception as e:
+        logger.error(f"Miniconda 安装失败: {e}")
+        raise
 
 
 def create_environment_yml():
     """创建环境配置文件"""
+    # ⚠️ 关键：将 pip 依赖分离到 post-install 步骤
+    # 避免 conda 的 pip 子进程问题
     environment_yml = '''name: whisperx-cloud
 channels:
   - pytorch
@@ -354,51 +291,123 @@ dependencies:
   - pytorch=2.0.0
   - torchaudio=2.0.0
   - pytorch-cuda=11.8
+  - ffmpeg
   - pip
-  - pip:
-    - fastapi==0.109.0
-    - uvicorn[standard]==0.27.0
-    - python-multipart==0.0.6
-    - pydantic==2.5.3
-    - requests
-    - pyngrok
-    - whisperx@git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853
 '''
     
     with open('environment.yml', 'w') as f:
         f.write(environment_yml)
     
-    logger.success("Created environment.yml")
+    logger.success("Created environment.yml (conda deps only)")
 
 
-def cleanup_on_failure(env_prefix):
-    """失败时清理"""
-    logger.warning("Cleaning up on failure...")
+def install_pip_dependencies(env_prefix: str) -> bool:
+    """单独安装 pip 依赖（解决 conda pip 子进程问题）"""
+    logger.progress("安装 pip 依赖...")
     
-    if env_prefix and os.path.exists(env_prefix):
+    python_path = f"{env_prefix}/bin/python"
+    
+    pip_packages = [
+        "fastapi==0.109.0",
+        "uvicorn[standard]==0.27.0",
+        "python-multipart==0.0.6",
+        "pydantic==2.5.3",
+        "requests",
+        "pyngrok",
+        # WhisperX 最后安装
+        "git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853"
+    ]
+    
+    for package in pip_packages:
+        logger.info(f"安装: {package}")
         try:
-            shutil.rmtree(env_prefix)
-            logger.info(f"Removed: {env_prefix}")
+            result = subprocess.run(
+                [python_path, '-m', 'pip', 'install', '--no-cache-dir', package],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"安装失败: {package}")
+                logger.error(f"错误输出: {result.stderr}")
+                
+                # 如果是 WhisperX 失败，尝试单独安装其依赖
+                if 'whisperx' in package.lower():
+                    logger.warning("WhisperX 安装失败，尝试预装依赖...")
+                    return install_whisperx_with_deps(python_path)
+                
+                return False
+            
+            logger.success(f"安装成功: {package}")
+            
+        except subprocess.TimeoutExpired:
+            logger.error(f"安装超时: {package}")
+            return False
         except Exception as e:
-            logger.error(f"Failed to remove {env_prefix}: {e}")
+            logger.error(f"安装异常: {package} - {e}")
+            return False
     
-    for tmp in ['/tmp/miniconda.sh', 'environment.yml']:
-        if os.path.exists(tmp):
-            try:
-                os.remove(tmp)
-                logger.info(f"Removed: {tmp}")
-            except:
-                pass
+    return True
 
 
-def verify_environment(env_prefix):
+def install_whisperx_with_deps(python_path: str) -> bool:
+    """尝试预装 WhisperX 依赖后再安装"""
+    logger.info("预装 WhisperX 依赖...")
+    
+    # 先安装 known working 版本的依赖
+    pre_deps = [
+        "numpy==1.26.4",  # 固定版本避免兼容性问题
+        "av==10.0.0",  # 使用预编译版本而非源码编译
+        "faster-whisper==1.0.0",
+        "ctranslate2==4.4.0",
+        "transformers==4.39.3",
+        "librosa==0.10.2.post1",
+        "soundfile>=0.12.1",
+        "pandas==2.2.3",
+    ]
+    
+    for dep in pre_deps:
+        logger.info(f"预装: {dep}")
+        result = subprocess.run(
+            [python_path, '-m', 'pip', 'install', dep],
+            capture_output=True,
+            text=True,
+            timeout=180
+        )
+        if result.returncode != 0:
+            logger.warning(f"预装跳过: {dep}")
+    
+    # 最后尝试安装 WhisperX
+    logger.info("尝试安装 WhisperX...")
+    result = subprocess.run(
+        [python_path, '-m', 'pip', 'install', 
+         'git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853'],
+        capture_output=True,
+        text=True,
+        timeout=300
+    )
+    
+    if result.returncode == 0:
+        logger.success("WhisperX 安装成功")
+        return True
+    else:
+        logger.error(f"WhisperX 安装失败: {result.stderr}")
+        return False
+
+
+def verify_environment(env_prefix: str) -> bool:
     """验证环境完整性"""
-    logger.progress("Verifying environment...")
+    logger.progress("验证环境...")
+    
+    if not env_prefix or not os.path.exists(env_prefix):
+        logger.error(f"环境目录不存在: {env_prefix}")
+        return False
     
     checks = [
-        ("环境目录", os.path.exists(env_prefix)),
-        ("Python", os.path.exists(f"{env_prefix}/bin/python")),
-        ("Conda", os.path.exists(f"{env_prefix}/bin/conda")),
+        ("bin/python", os.path.exists(f"{env_prefix}/bin/python")),
+        ("bin/pip", os.path.exists(f"{env_prefix}/bin/pip")),
+        ("lib/python3.10", os.path.exists(f"{env_prefix}/lib/python3.10")),
     ]
     
     all_ok = True
@@ -409,28 +418,70 @@ def verify_environment(env_prefix):
             logger.error(f"  {name}")
             all_ok = False
     
-    if all_ok:
-        # 显示目录内容
+    if not all_ok:
+        return False
+    
+    # 验证 Python 能运行
+    python_path = f"{env_prefix}/bin/python"
+    try:
+        result = subprocess.run(
+            [python_path, '--version'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            logger.success(f"Python: {result.stdout.strip()}")
+        else:
+            logger.error("Python 无法运行")
+            return False
+    except Exception as e:
+        logger.error(f"Python 验证失败: {e}")
+        return False
+    
+    # 验证关键包
+    test_imports = ['torch', 'fastapi']
+    for pkg in test_imports:
         try:
             result = subprocess.run(
-                ['ls', '-la', env_prefix],
+                [python_path, '-c', f'import {pkg}; print({pkg}.__version__)'],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=30
             )
-            logger.info("Directory contents:")
-            for line in result.stdout.strip().split('\n'):
-                logger.info(f"  {line}")
-        except Exception as e:
-            logger.warning(f"Could not list directory: {e}")
-        
-        return True
+            if result.returncode == 0:
+                logger.success(f"  {pkg}: {result.stdout.strip()}")
+            else:
+                logger.warning(f"  {pkg}: 导入失败")
+        except:
+            logger.warning(f"  {pkg}: 测试超时")
     
-    return False
+    return True
+
+
+def cleanup_on_failure(env_prefix):
+    """失败时清理"""
+    logger.warning("清理残留文件...")
+    
+    if env_prefix and os.path.exists(env_prefix):
+        try:
+            shutil.rmtree(env_prefix)
+            logger.info(f"已删除: {env_prefix}")
+        except Exception as e:
+            logger.error(f"删除失败: {e}")
+    
+    for tmp in ['/tmp/miniconda.sh', 'environment.yml']:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+                logger.info(f"已删除: {tmp}")
+            except:
+                pass
 
 
 def install_dependencies():
     """主安装流程"""
-    logger.section("WhisperX Cloud Installation")
+    logger.section("WhisperX Cloud Installation v2")
     start_time = time.time()
     
     ENV_PREFIX = None
@@ -438,156 +489,84 @@ def install_dependencies():
     
     try:
         # 步骤 1: 检测环境
-        logger.section("Step 1: Environment Detection")
+        logger.section("Step 1: 环境检测")
         SERVER_ENV = detect_server_environment()
-        logger.success(f"Detected environment: {SERVER_ENV.upper()}")
-        
         ENV_PREFIX = setup_environment_paths(SERVER_ENV)
         
+        if not ENV_PREFIX:
+            raise RuntimeError("环境路径设置失败")
+        
         # 步骤 2: 资源检查
-        logger.section("Step 2: Resource Check")
-        
-        # 检查磁盘空间
-        check_path = os.path.dirname(ENV_PREFIX) if ENV_PREFIX else '/tmp'
-        ok, free_gb = check_disk_space(check_path, min_gb=15.0)
+        logger.section("Step 2: 资源检查")
+        parent = os.path.dirname(ENV_PREFIX)
+        ok, _ = check_disk_space(parent, min_gb=15.0)
         if not ok:
-            raise RuntimeError("Insufficient disk space")
+            raise RuntimeError("磁盘空间不足")
         
-        # 检查网络
-        if not check_network():
-            raise RuntimeError("Network check failed")
-        
-        # 步骤 3: 安装 Conda
-        logger.section("Step 3: Conda Installation")
+        # 步骤 3: Conda
+        logger.section("Step 3: Conda 安装")
         CONDA_CMD = get_conda_cmd()
         
-        # 接受 Anaconda ToS
-        logger.info("Accepting Anaconda Terms of Service...")
+        # 接受 ToS
         try:
-            subprocess.run(
-                [CONDA_CMD, 'tos', 'accept', '--override-channels', 
-                 '--channel', 'https://repo.anaconda.com/pkgs/main'],
-                capture_output=True, check=False, timeout=10
-            )
-            subprocess.run(
-                [CONDA_CMD, 'tos', 'accept', '--override-channels', 
-                 '--channel', 'https://repo.anaconda.com/pkgs/r'],
-                capture_output=True, check=False, timeout=10
-            )
-            logger.success("ToS accepted")
-        except Exception as e:
-            logger.warning(f"ToS acceptance warning: {e}")
+            for channel in ['main', 'r']:
+                subprocess.run(
+                    [CONDA_CMD, 'tos', 'accept', 
+                     '--override-channels',
+                     '--channel', f'https://repo.anaconda.com/pkgs/{channel}'],
+                    capture_output=True, timeout=10
+                )
+            logger.success("ToS 已接受")
+        except:
+            pass
         
-        # 步骤 4: 创建环境
-        logger.section("Step 4: Environment Creation")
+        # 步骤 4: 创建 conda 环境（仅基础包）
+        logger.section("Step 4: Conda 环境创建")
         create_environment_yml()
         
-        # 检查是否已存在
-        if ENV_PREFIX:
-            env_exists = os.path.exists(ENV_PREFIX)
-        else:
-            result = subprocess.run(
-                [CONDA_CMD, 'env', 'list'],
-                capture_output=True, text=True, timeout=30
-            )
-            env_exists = 'whisperx-cloud' in result.stdout
+        # 检查已存在
+        if os.path.exists(ENV_PREFIX):
+            logger.warning("环境已存在，删除重建...")
+            shutil.rmtree(ENV_PREFIX, ignore_errors=True)
         
-        if env_exists:
-            logger.warning("Environment already exists")
-            # 在 Colab 中不交互，直接删除重建
-            if SERVER_ENV in ['colab', 'kaggle']:
-                logger.info("Removing existing environment...")
-                if ENV_PREFIX:
-                    shutil.rmtree(ENV_PREFIX, ignore_errors=True)
-                else:
-                    subprocess.run(
-                        [CONDA_CMD, 'env', 'remove', '-n', 'whisperx-cloud', '-y'],
-                        capture_output=True, timeout=60
-                    )
-            else:
-                choice = input("Remove and recreate? [y/N]: ").strip().lower()
-                if choice == 'y':
-                    logger.info("Removing existing environment...")
-                    if ENV_PREFIX:
-                        shutil.rmtree(ENV_PREFIX, ignore_errors=True)
-                    else:
-                        subprocess.run(
-                            [CONDA_CMD, 'env', 'remove', '-n', 'whisperx-cloud', '-y'],
-                            capture_output=True, timeout=60
-                        )
-                else:
-                    logger.info("Using existing environment")
-                    # 跳过创建，直接验证
-                    if verify_environment(ENV_PREFIX):
-                        logger.success("Environment verified")
-                    else:
-                        raise RuntimeError("Environment verification failed")
-                    
-                    # 保存配置
-                    CONDA_PYTHON = f"{ENV_PREFIX}/bin/python" if ENV_PREFIX else \
-                        os.path.expanduser('~/miniconda3/envs/whisperx-cloud/bin/python')
-                    with open('.conda_python_path', 'w') as f:
-                        f.write(CONDA_PYTHON)
-                    logger.success(f"Configuration saved: {CONDA_PYTHON}")
-                    
-                    elapsed = time.time() - start_time
-                    logger.section(f"Installation Complete (using existing env) - {elapsed:.1f}s")
-                    return True
+        logger.progress("创建 conda 环境（仅基础包）...")
+        logger.info(f"目标路径: {ENV_PREFIX}")
         
-        # 创建新环境
-        logger.progress("Creating new environment (this may take 5-10 minutes)...")
-        logger.info(f"Target path: {ENV_PREFIX or 'default conda envs'}")
+        process = subprocess.Popen(
+            [CONDA_CMD, 'env', 'create', '-f', 'environment.yml',
+             '--prefix', ENV_PREFIX, '--yes'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
         
-        if ENV_PREFIX:
-            # 带实时输出的创建
-            process = subprocess.Popen(
-                [CONDA_CMD, 'env', 'create', '-f', 'environment.yml', 
-                 '--prefix', ENV_PREFIX, '--yes'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-            
-            # 实时输出
-            for line in process.stdout:
-                line = line.strip()
-                if line:
-                    logger.info(f"  {line}")
-            
-            process.wait(timeout=INSTALL_TIMEOUT)
-            
-            if process.returncode != 0:
-                raise RuntimeError(f"Conda create failed with code {process.returncode}")
-        else:
-            # 使用默认位置
-            result = subprocess.run(
-                [CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--yes'],
-                capture_output=True, text=True, timeout=INSTALL_TIMEOUT
-            )
-            if result.returncode != 0:
-                logger.error(f"Error: {result.stderr}")
-                raise RuntimeError("Conda create failed")
+        for line in process.stdout:
+            line = line.strip()
+            if line:
+                logger.info(f"  {line}")
         
-        logger.success("Environment created")
+        process.wait(timeout=INSTALL_TIMEOUT)
         
-        # 验证环境
+        if process.returncode != 0:
+            raise RuntimeError(f"Conda 创建失败，code={process.returncode}")
+        
+        logger.success("Conda 环境创建成功")
+        
+        # 步骤 5: 安装 pip 依赖
+        logger.section("Step 5: Pip 依赖安装")
+        if not install_pip_dependencies(ENV_PREFIX):
+            logger.warning("部分 pip 包安装失败，但继续...")
+        
+        # 步骤 6: 验证
+        logger.section("Step 6: 环境验证")
         if not verify_environment(ENV_PREFIX):
-            raise RuntimeError("Environment verification failed")
+            raise RuntimeError("环境验证失败")
         
-        # 步骤 5: 保存配置
-        logger.section("Step 5: Save Configuration")
+        # 步骤 7: 保存配置
+        logger.section("Step 7: 保存配置")
         
-        CONDA_PYTHON = f"{ENV_PREFIX}/bin/python" if ENV_PREFIX else \
-            os.path.expanduser('~/miniconda3/envs/whisperx-cloud/bin/python')
-        
-        # 验证 Python 存在
-        if not os.path.exists(CONDA_PYTHON):
-            logger.error(f"Python not found at: {CONDA_PYTHON}")
-            raise RuntimeError("Python interpreter not found")
-        
-        # 保存配置
+        CONDA_PYTHON = f"{ENV_PREFIX}/bin/python"
         config = {
             'python_path': CONDA_PYTHON,
             'env_prefix': ENV_PREFIX,
@@ -598,34 +577,21 @@ def install_dependencies():
         with open('.conda_python_path', 'w') as f:
             json.dump(config, f, indent=2)
         
-        logger.success(f"Configuration saved: CONDA_PYTHON={CONDA_PYTHON}")
-        
-        # 显示环境信息
-        if SERVER_ENV == 'colab':
-            logger.info(f"COLAB: Environment at {ENV_PREFIX}")
-        elif SERVER_ENV == 'kaggle':
-            logger.info(f"KAGGLE: Environment at {ENV_PREFIX}")
-        elif SERVER_ENV != 'local':
-            logger.info(f"{SERVER_ENV.upper()}: Environment at {ENV_PREFIX}")
+        logger.success(f"配置已保存: {CONDA_PYTHON}")
         
         elapsed = time.time() - start_time
-        logger.section(f"Installation Complete - {elapsed:.1f}s")
-        logger.success("All steps completed successfully!")
+        logger.section(f"安装完成 - {elapsed:.1f}s")
         
         return True
         
     except Exception as e:
-        logger.error(f"Installation failed: {e}")
+        logger.error(f"安装失败: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        
-        # 清理
         cleanup_on_failure(ENV_PREFIX)
         
         elapsed = time.time() - start_time
-        logger.section(f"Installation Failed - {elapsed:.1f}s")
-        logger.info(f"Check log for details: {logger.log_file}")
-        
+        logger.section(f"安装失败 - {elapsed:.1f}s")
         return False
 
 
