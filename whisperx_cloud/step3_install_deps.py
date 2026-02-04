@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Step 3: 安装依赖 (强制使用 Conda)
-本脚本强制使用 Conda 进行安装，以获得更好的环境隔离和 CUDA 依赖管理。
+Step 3: 安装 Conda 和依赖
+本脚本会：
+1. 检查并安装 Miniconda（如果未安装）
+2. 使用 Conda 创建环境并安装依赖
 
 依赖版本说明 (参考 VideoLingo 父项目):
 - torch==2.0.0 - 与 VideoLingo 保持一致
@@ -15,39 +17,13 @@ import sys
 import os
 
 
-def check_conda():
-    """检查 Conda 是否可用"""
-    # 尝试标准 conda 命令
-    try:
-        result = subprocess.run(['conda', '--version'], capture_output=True, text=True)
-        if result.returncode == 0:
-            print(f"✅ Conda detected: {result.stdout.strip()}")
-            return True
-    except FileNotFoundError:
-        pass
-    
-    # 尝试用户目录下的 miniconda
-    miniconda_path = os.path.expanduser('~/miniconda3/bin/conda')
-    if os.path.exists(miniconda_path):
-        try:
-            result = subprocess.run([miniconda_path, '--version'], capture_output=True, text=True)
-            if result.returncode == 0:
-                print(f"✅ Conda detected: {result.stdout.strip()}")
-                # 添加到 PATH
-                os.environ['PATH'] = os.path.expanduser('~/miniconda3/bin:') + os.environ.get('PATH', '')
-                return True
-        except:
-            pass
-    
-    return False
-
-
 def get_conda_cmd():
-    """获取 conda 命令路径"""
+    """获取 conda 命令路径，如果没有则安装"""
     # 检查标准 conda
     try:
         result = subprocess.run(['conda', '--version'], capture_output=True, text=True)
         if result.returncode == 0:
+            print(f"✅ Conda detected: {result.stdout.strip()}")
             return 'conda'
     except:
         pass
@@ -55,11 +31,19 @@ def get_conda_cmd():
     # 检查用户目录 miniconda
     miniconda_conda = os.path.expanduser('~/miniconda3/bin/conda')
     if os.path.exists(miniconda_conda):
-        # 确保 PATH 包含 miniconda
         os.environ['PATH'] = os.path.expanduser('~/miniconda3/bin:') + os.environ.get('PATH', '')
+        result = subprocess.run([miniconda_conda, '--version'], capture_output=True, text=True)
+        print(f"✅ Miniconda detected: {result.stdout.strip()}")
         return miniconda_conda
     
-    return None
+    # 安装 Miniconda
+    print("📥 Installing Miniconda...")
+    subprocess.run(['wget', '-q', 'https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh', '-O', '/tmp/miniconda.sh'], check=True)
+    subprocess.run(['bash', '/tmp/miniconda.sh', '-b', '-p', os.path.expanduser('~/miniconda3')], check=True)
+    conda_cmd = os.path.expanduser('~/miniconda3/bin/conda')
+    os.environ['PATH'] = os.path.expanduser('~/miniconda3/bin:') + os.environ.get('PATH', '')
+    print("✅ Miniconda installed")
+    return conda_cmd
 
 
 def install_dependencies():
@@ -67,43 +51,27 @@ def install_dependencies():
     
     CONDA_CMD = get_conda_cmd()
     
-    if not CONDA_CMD:
-        print("❌ ERROR: Conda is not installed or not available in PATH!")
-        print("\n请按以下步骤安装 Conda:")
-        print("1. 安装 Miniconda: https://docs.conda.io/en/latest/miniconda.html")
-        print("2. 或使用 Anaconda: https://www.anaconda.com/download")
-        print("3. 重新启动 Notebook 并确保 Conda 在 PATH 中")
-        raise RuntimeError("Conda is required but not found")
-    
     print("\n📦 Installing dependencies with Conda...\n")
     
     # 检测平台
     IN_KAGGLE = os.path.exists('/kaggle')
     
-    # Kaggle 持久化目录设置 (Environment + Model Cache)
+    # Kaggle 持久化目录设置
     if IN_KAGGLE:
-        # Kaggle: 使用持久化目录保存环境和模型缓存
         ENV_PREFIX = '/kaggle/working/conda-envs/whisperx-cloud'
         os.makedirs('/kaggle/working/conda-envs', exist_ok=True)
-        # 设置 HuggingFace 缓存目录到持久化区域（避免每次重启重新下载模型）
         os.environ['HF_HOME'] = '/kaggle/working/.cache/huggingface'
         os.environ['TORCH_HOME'] = '/kaggle/working/.cache/torch'
         os.environ['CONDA_PKGS_DIRS'] = '/kaggle/working/.cache/conda/pkgs'
-        os.makedirs(os.environ['HF_HOME'], exist_ok=True)
-        os.makedirs(os.environ['TORCH_HOME'], exist_ok=True)
-        os.makedirs(os.environ['CONDA_PKGS_DIRS'], exist_ok=True)
-        print("📂 Kaggle detected: Using persistent directory")
-        print(f"   Environment path: {ENV_PREFIX}")
-        print(f"   HF Cache: {os.environ['HF_HOME']}")
-        print(f"   Torch Cache: {os.environ['TORCH_HOME']}")
+        for d in [os.environ['HF_HOME'], os.environ['TORCH_HOME'], os.environ['CONDA_PKGS_DIRS']]:
+            os.makedirs(d, exist_ok=True)
+        print("📂 Kaggle: Using persistent directory")
     else:
-        # 本地或其他环境：使用默认命名环境
         ENV_PREFIX = None
-        print("📂 Local environment: Using default conda env location")
+        print("📂 Local: Using default conda env location")
     
-    # 创建 conda 环境文件内容
-    environment_yml = '''
-name: whisperx-cloud
+    # 创建环境文件
+    environment_yml = '''name: whisperx-cloud
 channels:
   - pytorch
   - nvidia
@@ -125,59 +93,47 @@ dependencies:
     - whisperx@git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853
 '''
     
-    # 写入环境文件
     with open('environment.yml', 'w') as f:
         f.write(environment_yml)
-    
-    print("\n📝 Created environment.yml")
+    print("📝 Created environment.yml")
     
     # 检查环境是否已存在
     if ENV_PREFIX:
-        # Kaggle: 检查前缀路径
         env_exists = os.path.exists(ENV_PREFIX)
     else:
-        # 本地: 检查命名环境
         result = subprocess.run([CONDA_CMD, 'env', 'list'], capture_output=True, text=True)
         env_exists = 'whisperx-cloud' in result.stdout
     
+    # 创建或更新环境
     if env_exists:
-        print("\n🔄 Environment 'whisperx-cloud' already exists, updating...")
+        print("\n🔄 Environment exists, updating...")
         if ENV_PREFIX:
-            subprocess.check_call([CONDA_CMD, 'env', 'update', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'])
+            subprocess.run([CONDA_CMD, 'env', 'update', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'])
         else:
-            subprocess.check_call([CONDA_CMD, 'env', 'update', '-f', 'environment.yml', '-n', 'whisperx-cloud', '--yes'])
+            subprocess.run([CONDA_CMD, 'env', 'update', '-f', 'environment.yml', '-n', 'whisperx-cloud', '--yes'])
     else:
-        print("\n🆕 Creating new conda environment 'whisperx-cloud'...")
+        print("\n🆕 Creating new environment...")
         if ENV_PREFIX:
-            subprocess.check_call([CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'])
+            subprocess.run([CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--prefix', ENV_PREFIX, '--yes'])
         else:
-            subprocess.check_call([CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--yes'])
+            subprocess.run([CONDA_CMD, 'env', 'create', '-f', 'environment.yml', '--yes'])
     
     print("\n✅ Conda environment setup complete!")
     
-    if IN_KAGGLE:
-        print(f"\n📌 KAGGLE: Environment is persisted at: {ENV_PREFIX}")
-        print("   To activate in a new session:")
-        print(f"   conda activate {ENV_PREFIX}")
-        print("\n   Or use the conda run command:")
-        print(f"   conda run -p {ENV_PREFIX} python your_script.py")
+    # 获取 conda 环境的 Python 路径
+    if ENV_PREFIX:
+        CONDA_PYTHON = f"{ENV_PREFIX}/bin/python"
     else:
-        print("\n📌 IMPORTANT: 请手动激活环境后重新运行 Notebook:")
-        print("   1. 关闭当前 Notebook")
-        print("   2. 在终端执行: conda activate whisperx-cloud")
-        print("   3. 在该环境中重新启动 Jupyter Notebook")
-        print("\n   或者使用 nb_conda_kernels 在 Notebook 中选择环境")
+        CONDA_PYTHON = os.path.expanduser('~/miniconda3/envs/whisperx-cloud/bin/python')
     
-    # 可选的 speaker diarization
-    try:
-        from config import ENABLE_DIARIZATION
-        if ENABLE_DIARIZATION:
-            print("\n📦 Note: Speaker diarization requires pyannote.audio")
-            print("   Install with: pip install pyannote.audio==3.1.1")
-    except ImportError:
-        pass
+    # 保存配置供后续步骤使用
+    with open('.conda_python_path', 'w') as f:
+        f.write(CONDA_PYTHON)
     
-    print("\n⚠️  安装完成后，请确保使用 'whisperx-cloud' 环境运行此 Notebook")
+    print(f"\n📌 Conda Python path saved: {CONDA_PYTHON}")
+    
+    if IN_KAGGLE:
+        print(f"\n📌 KAGGLE: Environment at {ENV_PREFIX}")
     
     return True
 
