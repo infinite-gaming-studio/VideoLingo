@@ -10,6 +10,8 @@ import os
 import signal
 import sys
 
+from pyngrok import ngrok
+
 
 def start_server():
     """启动 API 服务器和 ngrok 隧道"""
@@ -33,7 +35,6 @@ def start_server():
     
     # 关闭现有 ngrok 隧道
     try:
-        from pyngrok import ngrok
         ngrok.kill()
     except:
         pass
@@ -59,7 +60,6 @@ def start_server():
     # 启动 ngrok
     print("\n🌐 Creating ngrok tunnel...")
     try:
-        from pyngrok import ngrok
         public_url = ngrok.connect(SERVER_PORT, "http")
         
         print("\n" + "="*60)
