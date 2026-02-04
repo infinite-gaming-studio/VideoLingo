@@ -316,13 +316,13 @@ dependencies:
   - ffmpeg  # conda-forge 版本支持 NVENC/NVDEC GPU 硬件加速
   - av  # PyAV 通过 conda 安装，避免编译
   - librosa=0.10.2
-  - soundfile>=0.12.1
+  - pysoundfile>=0.12.1  # conda-forge 中包名为 pysoundfile
   - numpy=1.26.4
   
   # ==================== ML Dependencies ====================
   # 优先用 mamba 安装，避免 pip 编译
-  - transformers=4.39.3
-  - pandas=2.2.3
+  - transformers>=4.39.0  # conda-forge 版本命名
+  - pandas>=2.2.0
   - pip
   
   # ==================== Build Tools ====================

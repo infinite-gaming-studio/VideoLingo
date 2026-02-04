@@ -23,7 +23,7 @@ dependencies:
   # ======================== Core Dependencies ========================
   # Audio Processing
   - librosa=0.10.2
-  - soundfile>=0.12.1
+  - pysoundfile>=0.12.1  # conda-forge 中包名为 pysoundfile
   - numpy=1.26.4
 
   # Data Processing
