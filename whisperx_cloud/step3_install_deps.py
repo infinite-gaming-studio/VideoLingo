@@ -51,6 +51,17 @@ def install_dependencies():
     
     CONDA_CMD = get_conda_cmd()
     
+    # 接受 Anaconda ToS（避免交互式确认）
+    print("\n📋 Accepting Anaconda Terms of Service...")
+    try:
+        subprocess.run([CONDA_CMD, 'tos', 'accept', '--override-channels', '--channel', 'https://repo.anaconda.com/pkgs/main'], 
+                      capture_output=True, check=False)
+        subprocess.run([CONDA_CMD, 'tos', 'accept', '--override-channels', '--channel', 'https://repo.anaconda.com/pkgs/r'],
+                      capture_output=True, check=False)
+        print("✅ ToS accepted")
+    except:
+        pass
+    
     print("\n📦 Installing dependencies with Conda...\n")
     
     # 检测平台 - 优先检测 Colab，再检测 Kaggle
