@@ -640,11 +640,16 @@ def verify_environment(env_prefix: str) -> bool:
         return False
     
     # 验证关键包
-    test_imports = ['torch', 'fastapi', 'whisperx']
-    for pkg in test_imports:
+    test_imports = [
+        ('torch', 'print(__import__("torch").__version__)'),
+        ('fastapi', 'print(__import__("fastapi").__version__)'),
+        ('whisperx', 'import whisperx; print(whisperx.__version__ if hasattr(whisperx, "__version__") else "installed")'),
+        ('faster_whisper', 'print(__import__("faster_whisper").__version__)'),
+    ]
+    for pkg, cmd in test_imports:
         try:
             result = subprocess.run(
-                [python_path, '-c', f'import {pkg}; print({pkg}.__version__)'],
+                [python_path, '-c', cmd],
                 capture_output=True,
                 text=True,
                 timeout=60
@@ -659,16 +664,29 @@ def verify_environment(env_prefix: str) -> bool:
                     logger.debug(f"    错误详情:\n{err_detail}")
                     
                     # 对 torch 的特殊诊断
-                    if pkg == 'torch' and ('cuda' in result.stderr.lower() or 'libcudart' in result.stderr.lower()):
-                        logger.warning("    提示: torch CUDA 库可能缺失，尝试修复...")
-                        # 尝试重新安装 cuda 运行时库
-                        fix_result = subprocess.run(
-                            [python_path, '-m', 'pip', 'install', '--force-reinstall', 
-                             'nvidia-cublas-cu11', 'nvidia-cuda-runtime-cu11', '-q'],
-                            capture_output=True, timeout=120
-                        )
-                        if fix_result.returncode == 0:
-                            logger.info("    已尝试修复 CUDA 库，请重新验证")
+                    if pkg == 'torch':
+                        error_lower = result.stderr.lower()
+                        if 'cuda' in error_lower or 'libcudart' in error_lower:
+                            logger.warning("    提示: torch CUDA 库可能缺失，尝试修复...")
+                            # 尝试重新安装 cuda 运行时库
+                            fix_result = subprocess.run(
+                                [python_path, '-m', 'pip', 'install', '--force-reinstall', 
+                                 'nvidia-cublas-cu11', 'nvidia-cuda-runtime-cu11', '-q'],
+                                capture_output=True, timeout=120
+                            )
+                            if fix_result.returncode == 0:
+                                logger.info("    已尝试修复 CUDA 库，请重新验证")
+                        elif 'ijit_notifyevent' in error_lower or 'mkl' in error_lower:
+                            logger.warning("    提示: MKL 库版本冲突 (iJIT_NotifyEvent)，尝试修复...")
+                            # MKL 版本冲突的修复方案
+                            logger.info("    安装兼容的 mkl-service...")
+                            fix_result = subprocess.run(
+                                [python_path, '-m', 'pip', 'install', '--force-reinstall',
+                                 'mkl-service==2.4.0', '-q'],
+                                capture_output=True, timeout=120
+                            )
+                            if fix_result.returncode == 0:
+                                logger.info("    已尝试修复 MKL 库，请重新验证")
         except Exception as e:
             logger.warning(f"  {pkg}: 测试失败 - {e}")
     
@@ -819,6 +837,57 @@ def install_dependencies():
         step_start = log_step("Pip 依赖安装", step_start)
         if not pip_success:
             logger.warning("部分 pip 包安装失败，但继续...")
+        
+        # 步骤 5.5: MKL 兼容性修复（在验证前修复已知问题）
+        logger.section("Step 5.5: MKL 兼容性修复")
+        python_path = f"{ENV_PREFIX}/bin/python"
+        
+        # 检查 torch 是否能正常导入
+        torch_test = subprocess.run(
+            [python_path, '-c', 'import torch; print("OK")'],
+            capture_output=True, text=True, timeout=30
+        )
+        
+        if torch_test.returncode != 0 and 'iJIT_NotifyEvent' in torch_test.stderr:
+            logger.warning("检测到 MKL 版本冲突，执行修复...")
+            # 方案 1: 安装兼容的 mkl-service
+            logger.info("尝试方案 1: 降级 mkl-service...")
+            subprocess.run(
+                [python_path, '-m', 'pip', 'install', '--force-reinstall', 
+                 'mkl-service==2.4.0', '-q'],
+                capture_output=True, timeout=120
+            )
+            
+            # 重新测试
+            torch_test2 = subprocess.run(
+                [python_path, '-c', 'import torch; print("OK")'],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            if torch_test2.returncode != 0:
+                # 方案 2: 强制使用 conda 的 mkl
+                logger.info("尝试方案 2: 强制重新安装 conda mkl...")
+                subprocess.run(
+                    [CONDA_CMD, 'install', '-p', ENV_PREFIX, 
+                     'mkl=2023.2', 'intel-openmp=2023.2', '-y', '--force-reinstall'],
+                    capture_output=True, timeout=300
+                )
+                
+                # 最终测试
+                torch_test3 = subprocess.run(
+                    [python_path, '-c', 'import torch; print("OK")'],
+                    capture_output=True, text=True, timeout=30
+                )
+                if torch_test3.returncode == 0:
+                    logger.success("MKL 修复成功")
+                else:
+                    logger.warning("MKL 修复可能未完全成功，但继续...")
+            else:
+                logger.success("MKL 修复成功 (方案 1)")
+        else:
+            logger.success("MKL 检查通过")
+        
+        step_start = log_step("MKL 兼容性修复", step_start)
         
         # 步骤 6: 验证
         logger.section("Step 6: 环境验证")
