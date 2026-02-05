@@ -10,7 +10,7 @@ Endpoints:
 Deploy on GPU cloud platforms (Colab, Kaggle, etc.)
 """
 
-SERVER_VERSION = "2.0.0"
+SERVER_VERSION = "2.1.0"
 
 import os
 import sys
@@ -455,4 +455,31 @@ def run_server(host="0.0.0.0", port=8000):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     host = os.environ.get("HOST", "0.0.0.0")
+    
+    # Optional ngrok support
+    ngrok_token = os.environ.get("NGROK_TOKEN") or os.environ.get("NGROK_AUTHTOKEN")
+    if ngrok_token:
+        try:
+            from pyngrok import ngrok, conf
+            print(f"🌐 Setting up ngrok tunnel on port {port}...")
+            conf.get_default().auth_token = ngrok_token
+            
+            # Kill any existing tunnels
+            try:
+                ngrok.kill()
+            except:
+                pass
+                
+            public_url = ngrok.connect(port).public_url
+            print(f"\n🚀 Server is public at: {public_url}")
+            print("\nTo use this with VideoLingo, update your config.yaml:")
+            print("  whisper:")
+            print("    runtime: cloud")
+            print(f"    whisperX_cloud_url: {public_url}")
+            print("  demucs: cloud\n")
+        except ImportError:
+            print("⚠️ pyngrok not installed, skipping ngrok tunnel setup.")
+        except Exception as e:
+            print(f"❌ Failed to start ngrok tunnel: {e}")
+
     run_server(host=host, port=port)
