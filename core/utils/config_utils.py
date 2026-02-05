@@ -22,9 +22,7 @@ def load_key(key, default=None):
         if isinstance(value, dict) and k in value:
             value = value[k]
         else:
-            if default is not None:
-                return default
-            raise KeyError(f"Key '{k}' not found in configuration")
+            return default
     return value
 
 def update_key(key, new_value):
@@ -35,18 +33,21 @@ def update_key(key, new_value):
         keys = key.split('.')
         current = data
         for k in keys[:-1]:
-            if isinstance(current, dict) and k in current:
+            if isinstance(current, dict):
+                # Create nested dict if not exists
+                if k not in current:
+                    current[k] = {}
                 current = current[k]
             else:
                 return False
 
-        if isinstance(current, dict) and keys[-1] in current:
+        if isinstance(current, dict):
             current[keys[-1]] = new_value
             with open(CONFIG_PATH, 'w', encoding='utf-8') as file:
                 yaml.dump(data, file)
             return True
         else:
-            raise KeyError(f"Key '{keys[-1]}' not found in configuration")
+            return False
         
 # basic utils
 def get_joiner(language):
