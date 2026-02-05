@@ -84,6 +84,7 @@ def transcribe():
     runtime = load_key("whisper.runtime")
     
     # In Cloud Native Mode, force using whisperX_asr which supports cloud
+    if is_cloud_native():
         from core.asr_backend.whisperX_asr import transcribe_audio as ts
         rprint("[cyan]☁️ Transcribing audio with Cloud Native ASR...[/cyan]")
     elif runtime == "local":
