@@ -301,12 +301,12 @@ def transcribe_audio_cloud_compatible(
     start: float,
     end: float
 ) -> Dict[str, Any]:
-"""
-Compatible function signature for VideoLingo integration
-Matches the signature of whisperX_asr.transcribe_audio
+    """
+    Compatible function signature for VideoLingo integration
+    Matches the signature of whisperX_asr.transcribe_audio
 
-This function automatically reads configuration from VideoLingo's config.yaml
-"""
+    This function automatically reads configuration from VideoLingo's config.yaml
+    """
     # Get config from VideoLingo
     try:
         whisper_language = load_key("whisper.language", "en")
