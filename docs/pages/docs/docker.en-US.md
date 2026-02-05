@@ -4,8 +4,79 @@ VideoLingo provides a Dockerfile that you can use to build the current VideoLing
 
 ## System Requirements
 
+### NVIDIA GPU Environment
 - CUDA version > 12.4
 - NVIDIA Driver version > 550
+
+### Apple Silicon (M1/M2/M3) Mac
+- macOS 12.0+ (Monterey or later)
+- Docker Desktop 4.20+ (with Rosetta enabled)
+- At least 16GB RAM (32GB recommended)
+
+---
+
+## Apple Silicon (ARM64) Docker Deployment
+
+For Apple Silicon Mac users, we provide dedicated ARM64 configurations that completely strip CUDA dependencies and run in CPU/MPS mode.
+
+### Quick Start
+
+```bash
+# 1. Clone repository
+git clone https://github.com/infinite-gaming-studio/VideoLingo.git
+cd VideoLingo
+
+# 2. Run one-click deployment script
+./deploy-arm64.sh
+```
+
+### Manual Deployment
+
+```bash
+# Build image
+docker-compose build videolingo
+
+# Start services
+docker-compose up -d videolingo
+
+# Access application
+open http://localhost:8501
+```
+
+### Configuration
+
+Create `config.yaml` configuration file:
+
+```yaml
+display_language: "en-US"
+
+api:
+  key: 'your-api-key-here'
+  base_url: 'https://api.openai.com/v1'
+  model: 'gpt-4'
+
+target_language: 'English'
+
+whisper:
+  model: 'large-v3'  # Use 'medium' for better speed
+  language: 'en'
+  runtime: 'local'
+
+demucs: true
+burn_subtitles: true
+ffmpeg_gpu: false  # Must be set to false
+tts_method: 'edge_tts'
+```
+
+### Performance Optimization Tips
+
+1. **Use smaller model**: Set `whisper.model` to `'medium'` for 2-3x speed improvement
+2. **Disable vocal separation**: Set `demucs: false` if not needed
+3. **Use WhisperX Cloud**: Start WhisperX cloud service for faster transcription
+
+---
+
+## NVIDIA GPU Docker Deployment
 
 ## Building and Running the Docker Image or Pulling from DockerHub
 
@@ -51,13 +122,24 @@ Please replace `/path/to/your/model` with the actual local path where you downlo
 
 ## Additional Information
 
+### NVIDIA GPU Image
 - Base image: nvidia/cuda:12.4.1-devel-ubuntu20.04
 - Python version: 3.10
 - Pre-installed software: git, curl, sudo, ffmpeg, fonts-noto, etc.
 - PyTorch version: 2.0.0 (CUDA 11.8)
 - Exposed port: 8501 (Streamlit application)
 
-For more detailed information, please refer to the Dockerfile.
+### Apple Silicon Image
+- Base image: ubuntu:22.04 (ARM64)
+- Python version: 3.10
+- PyTorch version: 2.2.0 (CPU version)
+- Supports MPS/CPU device detection
+- Includes WhisperX cloud service configuration
+
+### Related Documentation
+
+- [Detailed Deployment Guide](../../ARM64_MIGRATION_SUMMARY.md)
+- [Apple Silicon Docker Deployment Guide](../../docs/DOCKER_ARM64_DEPLOY.md)
 
 ## Future Plans
 

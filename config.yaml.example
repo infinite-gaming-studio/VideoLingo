@@ -37,8 +37,18 @@ whisper:
 
 # ==================== 人声分离配置 ====================
 # Demucs 人声分离 (分离人声和背景音乐)
-# Apple Silicon 上 CPU 模式较慢, 如果不需要可设为 false
-demucs: true
+# 
+# 运行模式:
+# - local: 本地运行 (需要安装 demucs 包, Apple Silicon CPU 模式较慢)
+# - cloud: 使用云端服务 (推荐, 更快且节省本地资源)
+# - false: 关闭人声分离
+#
+# 云端模式配置:
+# 1. 部署 whisperx_cloud/Unified_Cloud_Server.ipynb 到 GPU 服务器 (Colab/Kaggle)
+# 2. 将服务 URL 配置到 whisperX_cloud_url (统一服务, 无需单独配置 demucs)
+# 3. 设置 demucs: 'cloud'
+#
+demucs: 'cloud'
 
 # ==================== 字幕配置 ====================
 # 是否烧录字幕到视频

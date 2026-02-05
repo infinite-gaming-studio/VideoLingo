@@ -114,12 +114,35 @@ streamlit run st.py
 ```
 
 ### Docker
-还可以选择使用 Docker（要求 CUDA 12.4 和 NVIDIA Driver 版本 >550），详见[Docker文档](/docs/pages/docs/docker.zh-CN.md)：
+
+#### NVIDIA GPU (CUDA)
+NVIDIA GPU 用户（要求 CUDA 12.4 和 NVIDIA Driver 版本 >550），详见[Docker文档](/docs/pages/docs/docker.zh-CN.md)：
 
 ```bash
 docker build -t videolingo .
 docker run -d -p 8501:8501 --gpus all videolingo
 ```
+
+#### Apple Silicon (M1/M2/M3)
+Apple Silicon Mac 用户可使用 ARM64 优化配置：
+
+```bash
+# 克隆仓库
+git clone https://github.com/infinite-gaming-studio/VideoLingo.git
+cd VideoLingo
+
+# 运行一键部署脚本
+./deploy-arm64.sh
+```
+
+或手动部署：
+
+```bash
+docker-compose build videolingo
+docker-compose up -d videolingo
+```
+
+> **注意:** Apple Silicon 版本在 Docker 中使用 CPU 模式（容器内无法使用 MPS）。如需更好性能，建议使用 `python install.py` 本地安装，支持 MPS 加速。
 
 ## API
 本项目支持 OpenAI-Like 格式的 api 和多种配音接口：

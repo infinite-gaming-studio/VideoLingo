@@ -3,6 +3,12 @@ import platform
 import subprocess
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Import torch for MPS detection on Apple Silicon
+try:
+    import torch
+except ImportError:
+    torch = None
+
 ascii_logo = """
 __     ___     _            _     _                    
 \ \   / (_) __| | ___  ___ | |   (_)_ __   __ _  ___  
@@ -40,6 +46,16 @@ def check_nvidia_gpu():
     finally:
         if initialized:
             pynvml.nvmlShutdown()
+
+def check_apple_silicon():
+    """检测是否为 Apple Silicon (M1/M2/M3)"""
+    import platform
+    system = platform.system()
+    machine = platform.machine()
+    
+    if system == 'Darwin' and machine == 'arm64':
+        return True
+    return False
 
 def check_ffmpeg():
     from rich.console import Console
@@ -120,12 +136,20 @@ def main():
         choose_mirror()
 
     # Detect system and GPU
-    has_gpu = platform.system() != 'Darwin' and check_nvidia_gpu()
-    if has_gpu:
+    system = platform.system()
+    
+    if system == 'Darwin' and check_apple_silicon():
+        # Apple Silicon (M1/M2/M3)
+        console.print(Panel(t("🍎 Apple Silicon (M1/M2/M3) detected, installing PyTorch with MPS support..."), style="cyan"))
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "torch==2.2.0", "torchvision==0.17.0", "torchaudio==2.2.0"])
+        console.print(Panel(t("✅ MPS (Metal Performance Shaders) will be used for GPU acceleration on Apple Silicon"), style="green"))
+    elif system != 'Darwin' and check_nvidia_gpu():
+        # NVIDIA GPU on Windows/Linux
         console.print(Panel(t("🎮 NVIDIA GPU detected, installing CUDA version of PyTorch..."), style="cyan"))
         subprocess.check_call([sys.executable, "-m", "pip", "install", "torch==2.0.0", "torchaudio==2.0.0", "--index-url", "https://download.pytorch.org/whl/cu118"])
     else:
-        system_name = "🍎 MacOS" if platform.system() == 'Darwin' else "💻 No NVIDIA GPU"
+        # CPU only
+        system_name = "🍎 MacOS (Intel)" if system == 'Darwin' else "💻 No NVIDIA GPU"
         console.print(Panel(t(f"{system_name} detected, installing CPU version of PyTorch... Note: it might be slow during whisperX transcription."), style="cyan"))
         subprocess.check_call([sys.executable, "-m", "pip", "install", "torch==2.1.2", "torchaudio==2.1.2"])
 

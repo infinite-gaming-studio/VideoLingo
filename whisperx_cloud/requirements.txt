@@ -1,4 +1,4 @@
-# WhisperX Cloud API Server - Requirements
+# WhisperX & Demucs Cloud API Server - Requirements
 # Compatible with VideoLingo project
 # Reference: Parent project VideoLingo/requirements.txt
 #
@@ -19,6 +19,11 @@ faster-whisper==1.0.0
 # Pinned to specific commit for stability (same as VideoLingo)
 # Reference: VideoLingo/requirements.txt line 27
 whisperx @ git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853
+
+# ======================== Demucs (Vocal Separation) ========================
+# Demucs - State-of-the-art music source separation
+# Required for vocal separation service
+demucs[dev] @ git+https://github.com/adefossez/demucs
 
 # ======================== Deep Learning ========================
 # PyTorch - Deep learning framework
@@ -95,5 +100,6 @@ nest_asyncio
 # First run will download models (~3GB for large-v3)
 #
 # For VideoLingo integration:
-#   Set whisper.runtime = 'cloud' in VideoLingo/config.yaml
-#   Or set environment variable: WHISPERX_CLOUD_URL
+#   WhisperX: Set whisper.runtime = 'cloud' and whisper.whisperX_cloud_url in config.yaml
+#   Demucs: Set demucs = 'cloud' and demucs_cloud_url in config.yaml
+#   Or set environment variables: WHISPERX_CLOUD_URL, DEMUCS_CLOUD_URL

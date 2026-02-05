@@ -112,12 +112,35 @@ streamlit run st.py
 ```
 
 ### Docker
-Alternatively, you can use Docker (requires CUDA 12.4 and NVIDIA Driver version >550), see [Docker docs](/docs/pages/docs/docker.en-US.md):
+
+#### NVIDIA GPU (CUDA)
+For NVIDIA GPU users (requires CUDA 12.4 and NVIDIA Driver version >550), see [Docker docs](/docs/pages/docs/docker.en-US.md):
 
 ```bash
 docker build -t videolingo .
 docker run -d -p 8501:8501 --gpus all videolingo
 ```
+
+#### Apple Silicon (M1/M2/M3)
+For Apple Silicon Mac users, we provide ARM64 optimized configuration:
+
+```bash
+# Clone repository
+git clone https://github.com/infinite-gaming-studio/VideoLingo.git
+cd VideoLingo
+
+# Run one-click deployment script
+./deploy-arm64.sh
+```
+
+Or manually:
+
+```bash
+docker-compose build videolingo
+docker-compose up -d videolingo
+```
+
+> **Note:** Apple Silicon version uses CPU mode in Docker (MPS not available in containers). For better performance, consider native installation with `python install.py` which supports MPS acceleration.
 
 ## APIs
 VideoLingo supports OpenAI-Like API format and various TTS interfaces:

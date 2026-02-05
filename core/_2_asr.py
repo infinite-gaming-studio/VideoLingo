@@ -11,7 +11,8 @@ def transcribe():
     convert_video_to_audio(video_file)
 
     # 2. Demucs vocal separation:
-    if load_key("demucs"):
+    demucs_mode = load_key("demucs")
+    if demucs_mode and demucs_mode != False:
         demucs_audio()
         vocal_audio = normalize_audio_volume(_VOCAL_AUDIO_FILE, _VOCAL_AUDIO_FILE, format="mp3")
     else:

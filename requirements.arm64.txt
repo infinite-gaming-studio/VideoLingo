@@ -1,6 +1,7 @@
-# VideoLingo ARM64 (Apple Silicon) 依赖配置
+# VideoLingo ARM64 (Apple Silicon) 依赖配置 - 轻量化版本
 # 此配置剥离了CUDA依赖，使用CPU版本的PyTorch
-
+# demucs 和 whisperx 已迁移到云端API，本地不再安装
+#
 # 注意: PyTorch CPU版本需要在Dockerfile中单独安装
 # RUN pip install torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cpu
 
@@ -30,9 +31,10 @@ autocorrect-py
 ctranslate2==4.4.0
 edge-tts
 
-# 人声分离和ASR (从Git安装)
-demucs[dev] @ git+https://github.com/adefossez/demucs
-whisperx @ git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853
+# 注意: demucs 和 whisperx 已迁移到云端API
+# 如需本地运行，请取消下面注释:
+# demucs[dev] @ git+https://github.com/adefossez/demucs
+# whisperx @ git+https://github.com/m-bain/whisperx.git@7307306a9d8dd0d261e588cc933322454f853853
 
 # 中文/拼音处理
 syllables

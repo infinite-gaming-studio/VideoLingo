@@ -1,31 +1,73 @@
 import os
-import torch
 from rich.console import Console
 from rich import print as rprint
-from demucs.pretrained import get_model
-from demucs.audio import save_audio
-from torch.cuda import is_available as is_cuda_available
 from typing import Optional
-from demucs.api import Separator
-from demucs.apply import BagOfModels
-import gc
 from core.utils.models import *
 
-class PreloadedSeparator(Separator):
-    def __init__(self, model: BagOfModels, shifts: int = 1, overlap: float = 0.25,
-                 split: bool = True, segment: Optional[int] = None, jobs: int = 0):
-        self._model, self._audio_channels, self._samplerate = model, model.audio_channels, model.samplerate
-        device = "cuda" if is_cuda_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-        self.update_parameter(device=device, shifts=shifts, overlap=overlap, split=split,
-                            segment=segment, jobs=jobs, progress=True, callback=None, callback_arg=None)
+console = Console()
 
-def demucs_audio():
-    if os.path.exists(_VOCAL_AUDIO_FILE) and os.path.exists(_BACKGROUND_AUDIO_FILE):
-        rprint(f"[yellow]⚠️ {_VOCAL_AUDIO_FILE} and {_BACKGROUND_AUDIO_FILE} already exist, skip Demucs processing.[/yellow]")
-        return
+# Cloud API configuration
+DEMUCS_CLOUD_URL = os.getenv("DEMUCS_CLOUD_URL", "")
+
+def get_cloud_url() -> str:
+    """Get cloud URL from environment or config"""
+    if DEMUCS_CLOUD_URL:
+        return DEMUCS_CLOUD_URL.rstrip('/')
     
-    console = Console()
-    os.makedirs(_AUDIO_DIR, exist_ok=True)
+    try:
+        from core.utils import load_key
+        # Try demucs_cloud_url first, fallback to whisperX_cloud_url
+        url = load_key("demucs_cloud_url", "")
+        if not url:
+            url = load_key("whisper.whisperX_cloud_url", "")
+        if url:
+            return url.rstrip('/')
+    except:
+        pass
+    
+    return ""
+
+def check_cloud_available(url: str = None) -> bool:
+    """Check if cloud Demucs service is available"""
+    url = url or get_cloud_url()
+    if not url:
+        return False
+    
+    try:
+        import requests
+        response = requests.get(f"{url}/", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            services = data.get('services', {})
+            return services.get('separation', {}).get('available', False)
+        return False
+    except:
+        return False
+
+def separate_audio_local():
+    """Local Demucs processing (requires demucs package)"""
+    try:
+        import torch
+        from demucs.pretrained import get_model
+        from demucs.audio import save_audio
+        from torch.cuda import is_available as is_cuda_available
+        from demucs.api import Separator
+        from demucs.apply import BagOfModels
+        import gc
+    except ImportError as e:
+        raise ImportError(
+            "Local Demucs processing requires 'demucs' package. "
+            "Install with: pip install demucs\n"
+            "Or use cloud mode by setting whisper.whisperX_cloud_url in config.yaml"
+        ) from e
+    
+    class PreloadedSeparator(Separator):
+        def __init__(self, model: BagOfModels, shifts: int = 1, overlap: float = 0.25,
+                     split: bool = True, segment: Optional[int] = None, jobs: int = 0):
+            self._model, self._audio_channels, self._samplerate = model, model.audio_channels, model.samplerate
+            device = "cuda" if is_cuda_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+            self.update_parameter(device=device, shifts=shifts, overlap=overlap, split=split,
+                                segment=segment, jobs=jobs, progress=True, callback=None, callback_arg=None)
     
     console.print("🤖 Loading <htdemucs> model...")
     model = get_model('htdemucs')
@@ -47,8 +89,104 @@ def demucs_audio():
     # Clean up memory
     del outputs, background, model, separator
     gc.collect()
+
+def separate_audio_cloud(cloud_url: str = None):
+    """Cloud Demucs processing via unified API"""
+    url = cloud_url or get_cloud_url()
     
-    console.print("[green]✨ Audio separation completed![/green]")
+    if not url:
+        raise ValueError(
+            "Cloud URL not configured. Set whisper.whisperX_cloud_url in config.yaml "
+            "or DEMUCS_CLOUD_URL env var"
+        )
+    
+    try:
+        # Try unified client first
+        from whisperx_cloud.unified_client import separate_audio_cloud as cloud_separate
+        cloud_separate(
+            audio_file=_RAW_AUDIO_FILE,
+            vocals_output=_VOCAL_AUDIO_FILE,
+            background_output=_BACKGROUND_AUDIO_FILE,
+            cloud_url=url
+        )
+    except ImportError:
+        # Fallback: inline implementation
+        import requests
+        import base64
+        
+        console.print(f"🚀 Using cloud Demucs: {url}")
+        console.print("🎵 Sending audio for separation...")
+        
+        with open(_RAW_AUDIO_FILE, 'rb') as f:
+            files = {'audio': (os.path.basename(_RAW_AUDIO_FILE), f, 'audio/wav')}
+            data = {'return_files': 'true'}
+            
+            response = requests.post(
+                f"{url}/separation/separate",
+                files=files,
+                data=data,
+                timeout=300
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"API Error {response.status_code}: {response.text}")
+            
+            result = response.json()
+            
+            if not result.get('success'):
+                raise Exception(f"Separation failed: {result}")
+            
+            # Decode and save
+            vocals_b64 = result.get('vocals_base64')
+            if vocals_b64:
+                os.makedirs(os.path.dirname(_VOCAL_AUDIO_FILE) or '.', exist_ok=True)
+                with open(_VOCAL_AUDIO_FILE, 'wb') as f:
+                    f.write(base64.b64decode(vocals_b64))
+                console.print(f"[green]✅ Vocals saved[/green]")
+            
+            background_b64 = result.get('background_base64')
+            if background_b64:
+                os.makedirs(os.path.dirname(_BACKGROUND_AUDIO_FILE) or '.', exist_ok=True)
+                with open(_BACKGROUND_AUDIO_FILE, 'wb') as f:
+                    f.write(base64.b64decode(background_b64))
+                console.print(f"[green]✅ Background saved[/green]")
+
+def demucs_audio():
+    """
+    Main entry point for Demucs audio separation
+    Automatically chooses between local and cloud processing
+    """
+    if os.path.exists(_VOCAL_AUDIO_FILE) and os.path.exists(_BACKGROUND_AUDIO_FILE):
+        rprint(f"[yellow]⚠️ {_VOCAL_AUDIO_FILE} and {_BACKGROUND_AUDIO_FILE} already exist, skip Demucs processing.[/yellow]")
+        return
+    
+    os.makedirs(_AUDIO_DIR, exist_ok=True)
+    
+    # Check if cloud URL is configured and available
+    cloud_url = get_cloud_url()
+    
+    if cloud_url and check_cloud_available(cloud_url):
+        # Use cloud processing
+        try:
+            separate_audio_cloud(cloud_url)
+            console.print("[green]✨ Audio separation completed (cloud)![/green]")
+            return
+        except Exception as e:
+            rprint(f"[yellow]⚠️ Cloud processing failed: {e}[/yellow]")
+            rprint("[yellow]Falling back to local processing...[/yellow]")
+    
+    # Use local processing
+    try:
+        separate_audio_local()
+        console.print("[green]✨ Audio separation completed (local)![/green]")
+    except ImportError as e:
+        rprint(f"[red]❌ {e}[/red]")
+        rprint("[yellow]To use cloud Demucs:[/yellow]")
+        rprint("  1. Deploy unified server using whisperx_cloud/Unified_Cloud_Server.ipynb")
+        rprint("  2. Set whisper.whisperX_cloud_url in config.yaml")
+        rprint("[yellow]Or install demucs locally:[/yellow]")
+        rprint("  pip install demucs")
+        raise
 
 if __name__ == "__main__":
     demucs_audio()
