@@ -3,12 +3,12 @@ VideoLingo Demucs Audio Separation Module
 Supports both local GPU processing and cloud-native remote processing
 
 Cloud Native Mode:
-- When cloud_native.enabled=true in config.yaml
+- When whisper.runtime='cloud' in config.yaml
 - All separation processing is done via remote Demucs cloud service
 - No local torch/demucs dependencies required
 
 Local Mode (Legacy):
-- When cloud_native.enabled=false or not set
+- When whisper.runtime='local' or 'elevenlabs'
 - Uses local GPU for separation processing
 - Requires torch, demucs, and other GPU dependencies
 """
@@ -26,35 +26,38 @@ DEMUCS_CLOUD_URL = os.getenv("DEMUCS_CLOUD_URL", "")
 
 
 def is_cloud_native():
-    """Check if cloud native mode is enabled in config"""
+    """Check if cloud native mode is enabled in config
+    Uses runtime='cloud'"""
     try:
         from core.utils import load_key
-        return load_key("cloud_native.enabled", False)
+        # Cloud mode is enabled when runtime='cloud'
+        if load_key("whisper.runtime", "") == "cloud":
+            return True
+        return False
     except:
         return False
 
 
 def is_cloud_separation_enabled():
     """Check if cloud separation feature is enabled"""
-    try:
-        from core.utils import load_key
-        if not load_key("cloud_native.enabled", False):
-            return False
-        return load_key("cloud_native.features.separation", True)
-    except:
-        return False
+    # Cloud separation is enabled when in cloud native mode
+    return is_cloud_native()
 
 def get_cloud_url() -> str:
-    """Get cloud URL from environment or config"""
+    """Get cloud URL from environment or config
+    Priority: DEMUCS_CLOUD_URL env > cloud_native.cloud_url > whisper.whisperX_cloud_url"""
     if DEMUCS_CLOUD_URL:
         return DEMUCS_CLOUD_URL.rstrip('/')
     
     try:
         from core.utils import load_key
-        # Try demucs_cloud_url first, fallback to whisperX_cloud_url
-        url = load_key("demucs_cloud_url", "")
-        if not url:
-            url = load_key("whisper.whisperX_cloud_url", "")
+        # Unified cloud_native configuration (recommended)
+        url = load_key("cloud_native.cloud_url", "")
+        if url:
+            return url.rstrip('/')
+        
+        # Legacy whisper configuration (backward compatibility)
+        url = load_key("whisper.whisperX_cloud_url", "")
         if url:
             return url.rstrip('/')
     except:

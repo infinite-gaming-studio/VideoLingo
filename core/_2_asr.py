@@ -3,7 +3,7 @@ VideoLingo ASR Transcription Module
 Main entry point for audio transcription pipeline
 
 Cloud Native Mode:
-- When cloud_native.enabled=true in config.yaml
+- When whisper.runtime='cloud' in config.yaml
 - All AI processing (ASR + Demucs) uses remote cloud services
 - Local processing includes: FFmpeg, pydub, spacy (lightweight)
 
@@ -20,8 +20,12 @@ from core.utils.models import *
 
 
 def is_cloud_native():
-    """Check if cloud native mode is enabled"""
-    return load_key("cloud_native.enabled", False)
+    """Check if cloud native mode is enabled
+    Uses runtime='cloud' in config.yaml"""
+    # Cloud mode is enabled when runtime='cloud'
+    if load_key("whisper.runtime", "") == "cloud":
+        return True
+    return False
 
 
 def check_cloud_native_prerequisites():
@@ -29,26 +33,27 @@ def check_cloud_native_prerequisites():
     if not is_cloud_native():
         return True
     
-    cloud_url = load_key("cloud_native.cloud_url", "")
-    if not cloud_url:
-        raise ValueError(
-            "Cloud Native Mode is enabled but cloud_native.cloud_url is not configured.\n"
-            "Please deploy the unified cloud server and set the URL in config.yaml"
-        )
-    
-    # Try to import and check cloud client
+    # Use unified cloud client to get URL
     try:
-        from whisperx_cloud.unified_client import check_cloud_connection
+        from whisperx_cloud.unified_client import get_cloud_url, check_cloud_connection
+        cloud_url = get_cloud_url()
+        
+        if not cloud_url:
+            raise ValueError(
+                "Cloud Mode is enabled but cloud URL is not configured.\n"
+                "Please set cloud_native.cloud_url in config.yaml"
+            )
+        
         result = check_cloud_connection(cloud_url)
         if not result.get('available'):
             raise ConnectionError(
                 f"Cannot connect to cloud service at {cloud_url}\n"
                 f"Error: {result.get('error', 'Unknown error')}"
             )
-        rprint(f"[green]✅ Cloud Native Mode: Connected to {cloud_url}[/green]")
+        rprint(f"[green]✅ Cloud Mode: Connected to {cloud_url}[/green]")
     except ImportError:
         raise ImportError(
-            "Cloud Native Mode requires whisperx_cloud module.\n"
+            "Cloud Mode requires whisperx_cloud module.\n"
             "Please ensure whisperx_cloud/ directory is in the project root."
         )
     
@@ -84,7 +89,8 @@ def transcribe():
     runtime = load_key("whisper.runtime")
     
     # In Cloud Native Mode, force using whisperX_asr which supports cloud
-    if is_cloud_native():
+    # Also support legacy runtime="cloud" for backward compatibility
+    if is_cloud_native() or runtime == "cloud":
         from core.asr_backend.whisperX_asr import transcribe_audio as ts
         rprint("[cyan]☁️ Transcribing audio with Cloud Native ASR...[/cyan]")
     elif runtime == "local":

@@ -27,18 +27,24 @@ whisper:
   language: 'zh'
   detected_language: 'en'
 
-  # 运行模式: ["local", "elevenlabs"]
+  # 运行模式: ["local", "elevenlabs", "cloud"]
   # - local: 使用本地 WhisperX 模型 (需要 GPU)
   # - elevenlabs: 使用 ElevenLabs API
-  # - cloud_native: 启用 cloud_native.enabled 使用自建云端服务
+  # - cloud: 使用云端服务 (配置 cloud_native 或 whisperX_cloud_url)
   runtime: 'local'
 
-  # WhisperX 云端服务 URL
+  # WhisperX 云端服务 URL (旧配置，推荐使用 cloud_native)
   whisperX_cloud_url: ''
-  # WhisperX API token (用于远程 GPU 服务器验证)
+  # WhisperX API token (用于远程 GPU 服务器验证, 旧配置，推荐使用 cloud_native)
   whisperX_token: ''
   # ElevenLabs API key
   elevenlabs_api_key: ''
+
+# ==================== 云端服务统一配置 ====================
+# 推荐使用此配置方式，所有服务使用同一个云端地址和令牌
+cloud_native:
+  cloud_url: 'YOUR_CLOUD_URL_HERE'   # 统一的云端服务地址
+  token: 'YOUR_TOKEN_HERE'           # 统一的认证令牌
 
 # ==================== 人声分离配置 ====================
 demucs: true

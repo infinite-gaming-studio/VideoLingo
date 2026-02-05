@@ -1,0 +1,109 @@
+# VideoLingo 统一配置示例（云端模式）
+# 所有云端服务使用统一的配置
+
+# ==================== 基础配置 ====================
+display_language: "zh-CN"
+target_language: 'english'
+
+# ==================== API 配置 ====================
+api:
+  key: 'YOUR_API_KEY'
+  base_url: 'https://api.openai.com/v1'
+  model: 'gpt-4'
+  llm_support_json: true
+  max_workers: 4
+
+# ==================== 云端服务统一配置 ====================
+# 推荐使用此配置方式，所有服务使用同一个云端地址和令牌
+cloud_native:
+  cloud_url: 'https://your-cloud-server.com'  # 统一的云端服务地址
+  token: 'your-token-here'           # 统一的认证令牌
+
+# ==================== WhisperX 配置 ====================
+whisper:
+  model: 'large-v3'
+  language: 'zh'
+  runtime: 'cloud'                   # 选择 'cloud' 启用云端，'local' 本地运行，'elevenlabs' 使用 ElevenLabs
+  # 以下配置可选，如果不设置则使用 cloud_native 中的统一配置
+  # whisperX_cloud_url: ''           # 如需要可单独指定，否则使用 cloud_native.cloud_url
+  # whisperX_token: ''               # 如需要可单独指定，否则使用 cloud_native.token
+
+# ==================== 人声分离配置 ====================
+# 在云端模式下，自动使用云端服务进行人声分离
+demucs: true
+
+# ==================== 字幕配置 ====================
+burn_subtitles: true
+ffmpeg_gpu: false
+
+subtitle:
+  max_length: 75
+  target_multiplier: 1.2
+
+# ==================== TTS 配置 ====================
+tts_method: 'edge_tts'
+
+# Edge TTS configuration
+edge_tts:
+  voice: 'en-US-JennyNeural'
+
+# ==================== 模型目录配置 ====================
+model_dir: '/app/models'
+
+# ==================== 性能优化配置 ====================
+batch_size: 1
+compute_type: 'int8'
+
+# ==================== 音频速度与合并配置 ====================
+speed_factor:
+  min: 1
+  accept: 1.2
+  max: 1.4
+
+min_subtitle_duration: 2.5
+min_trim_duration: 3.5
+tolerance: 1.5
+
+# ==================== 其他配置 ====================
+subtitle_style:
+  font: 'Noto Sans CJK SC'
+  font_size: 24
+  color: 'white'
+  outline_color: 'black'
+  outline_width: 2
+  alignment: 'center'
+
+audio_quality: 'high'
+
+allowed_video_formats: ['mp4', 'mov', 'avi', 'mkv', 'flv', 'wmv', 'webm']
+allowed_audio_formats: ['wav', 'mp3', 'flac', 'm4a']
+
+# ==================== 高级配置 ====================
+temp_dir: '/app/temp'
+log_level: 'INFO'
+debug: false
+
+# Spacy models
+spacy_model_map:
+  en: 'en_core_web_md'
+  ru: 'ru_core_news_md'
+  fr: 'fr_core_news_md'
+  ja: 'ja_core_news_md'
+  es: 'es_core_news_md'
+  de: 'de_core_news_md'
+  it: 'it_core_news_md'
+  zh: 'zh_core_web_md'
+
+# Languages that use space as separator
+language_split_with_space:
+- 'en'
+- 'es'
+- 'fr'
+- 'de'
+- 'it'
+- 'ru'
+
+# Languages that do not use space as separator
+language_split_without_space:
+- 'zh'
+- 'ja'

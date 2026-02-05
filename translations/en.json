@@ -113,5 +113,13 @@
     "Cloud Service URL": "Cloud Service URL",
     "URL for both WhisperX and Demucs cloud services": "URL for both WhisperX and Demucs cloud services",
     "Authentication Token": "Authentication Token",
-    "Token for cloud services authentication": "Token for cloud services authentication"
+    "Token for cloud services authentication": "Token for cloud services authentication",
+    "Unified Cloud Service URL": "Unified Cloud Service URL",
+    "Unified Authentication Token": "Unified Authentication Token",
+    "Unified cloud service URL for WhisperX ASR and Demucs separation (recommended)": "Unified cloud service URL for WhisperX ASR and Demucs separation (recommended)",
+    "Unified authentication token for all cloud services (recommended)": "Unified authentication token for all cloud services (recommended)",
+    "Legacy Configuration (Optional)": "Legacy Configuration (Optional)",
+    "You can use the unified config above, or set individual URLs below for backward compatibility": "You can use the unified config above, or set individual URLs below for backward compatibility",
+    "Legacy: URL for WhisperX cloud service (optional if unified config is set)": "Legacy: URL for WhisperX cloud service (optional if unified config is set)",
+    "Legacy: Token for WhisperX service (optional if unified config is set)": "Legacy: Token for WhisperX service (optional if unified config is set)"
 }

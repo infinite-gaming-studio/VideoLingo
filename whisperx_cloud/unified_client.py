@@ -31,15 +31,51 @@ RETRY_DELAY = 5
 
 
 def get_cloud_url() -> str:
-    """Get cloud URL from environment or config"""
+    """Get cloud URL from environment or config
+    Priority: CLOUD_URL env > cloud_native.cloud_url > whisper.whisperX_cloud_url"""
     url = os.getenv("CLOUD_URL", "")
     if url:
         return url.rstrip('/')
     
+    # Unified cloud_native configuration (recommended)
+    try:
+        url = load_key("cloud_native.cloud_url", "")
+        if url:
+            return url.rstrip('/')
+    except:
+        pass
+    
+    # Legacy whisper configuration (backward compatibility)
     try:
         url = load_key("whisper.whisperX_cloud_url", "")
         if url:
             return url.rstrip('/')
+    except:
+        pass
+    
+    return ""
+
+
+def get_cloud_token() -> str:
+    """Get cloud token from environment or config
+    Priority: WHISPERX_CLOUD_TOKEN env > cloud_native.token > whisper.whisperX_token"""
+    token = os.getenv("WHISPERX_CLOUD_TOKEN", "")
+    if token:
+        return token
+    
+    # Unified cloud_native configuration (recommended)
+    try:
+        token = load_key("cloud_native.token", "")
+        if token:
+            return token
+    except:
+        pass
+    
+    # Legacy whisper configuration (backward compatibility)
+    try:
+        token = load_key("whisper.whisperX_token", "")
+        if token:
+            return token
     except:
         pass
     
@@ -385,19 +421,19 @@ def transcribe_audio_cloud_compatible(
     """Compatible function for VideoLingo ASR integration"""
     try:
         whisper_language = load_key("whisper.language", "en")
-        cloud_url = load_key("whisper.whisperX_cloud_url", "")
         model = load_key("whisper.model", "large-v3")
-        token = load_key("whisper.whisperX_token", "")
-    except Exception as e:
+    except:
         whisper_language = "en"
-        cloud_url = get_cloud_url()
         model = "large-v3"
-        token = None
+    
+    # Use unified cloud configuration
+    cloud_url = get_cloud_url()
+    token = get_cloud_token()
     
     if not cloud_url:
         raise ValueError(
-            "whisper.whisperX_cloud_url not configured in config.yaml.\n"
-            "Please deploy the unified cloud server and set the URL."
+            "Cloud URL not configured. Set cloud_native.cloud_url or whisper.whisperX_cloud_url in config.yaml\n"
+            "or set CLOUD_URL environment variable."
         )
     
     return transcribe_audio_cloud(
@@ -418,19 +454,14 @@ def separate_audio_cloud_compatible(
     background_output: str
 ) -> bool:
     """Compatible function for VideoLingo separation integration"""
-    try:
-        cloud_url = load_key("demucs_cloud_url", "")
-        if not cloud_url:
-            cloud_url = load_key("whisper.whisperX_cloud_url", "")
-        token = load_key("whisper.whisperX_token", "")
-    except Exception as e:
-        cloud_url = get_cloud_url()
-        token = None
+    # Use unified cloud configuration (same as ASR)
+    cloud_url = get_cloud_url()
+    token = get_cloud_token()
     
     if not cloud_url:
         raise ValueError(
-            "Cloud URL not configured. Set whisper.whisperX_cloud_url in config.yaml\n"
-            "or DEMUCS_CLOUD_URL environment variable."
+            "Cloud URL not configured. Set cloud_native.cloud_url or whisper.whisperX_cloud_url in config.yaml\n"
+            "or set CLOUD_URL environment variable."
         )
     
     return separate_audio_cloud(

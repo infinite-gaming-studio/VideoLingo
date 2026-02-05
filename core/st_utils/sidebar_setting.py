@@ -24,8 +24,8 @@ def page_setting():
             SIDEBAR_KEYS = [
                 "display_language",
                 "api.key", "api.base_url", "api.model", "api.llm_support_json",
-                "whisper.language", "whisper.runtime", "whisper.whisperX_cloud_url", "whisper.whisperX_token", "whisper.whisperX_302_api_key", "whisper.elevenlabs_api_key",
-                "demucs_cloud_url", "demucs_token",
+                "whisper.language", "whisper.runtime", "whisper.whisperX_cloud_url", "whisper.whisperX_token", "whisper.elevenlabs_api_key",
+                "cloud_native.cloud_url", "cloud_native.token",
                 "target_language", "demucs", "burn_subtitles", "tts_method",
                 "sf_fish_tts.api_key", "sf_fish_tts.mode", "sf_fish_tts.voice",
                 "openai_tts.api_key", "openai_tts.voice",
@@ -176,12 +176,15 @@ def page_setting():
         if runtime == "cloud" or demucs:
             with st.container(border=True):
                 st.write(f"🌐 {t('Cloud Service Settings')}")
-                # Use a unified key if possible, but allow separate if needed
-                config_input(t("Cloud Service URL"), "whisper.whisperX_cloud_url", help=t("URL for both WhisperX and Demucs cloud services"))
-                config_input(t("Authentication Token"), "whisper.whisperX_token", help=t("Token for cloud services authentication"))
-
-                if runtime == "cloud":
-                    config_input(t("WhisperX 302ai API"), "whisper.whisperX_302_api_key")
+                # Unified cloud_native configuration
+                config_input(t("Unified Cloud Service URL"), "cloud_native.cloud_url", help=t("Unified cloud service URL for WhisperX ASR and Demucs separation (recommended)"))
+                config_input(t("Unified Authentication Token"), "cloud_native.token", help=t("Unified authentication token for all cloud services (recommended)"))
+                
+                # Legacy configuration for backward compatibility
+                with st.expander(t("Legacy Configuration (Optional)"), expanded=False):
+                    st.info(t("You can use the unified config above, or set individual URLs below for backward compatibility"))
+                    config_input(t("WhisperX Cloud URL"), "whisper.whisperX_cloud_url", help=t("Legacy: URL for WhisperX cloud service (optional if unified config is set)"))
+                    config_input(t("WhisperX Token"), "whisper.whisperX_token", help=t("Legacy: Token for WhisperX service (optional if unified config is set)"))
     with st.expander(t("Dubbing Settings"), expanded=True):
         tts_methods = ["azure_tts", "openai_tts", "fish_tts", "sf_fish_tts", "edge_tts", "gpt_sovits", "custom_tts", "sf_cosyvoice2", "f5tts"]
         select_tts = st.selectbox(t("TTS Method"), options=tts_methods, index=tts_methods.index(load_key("tts_method")))

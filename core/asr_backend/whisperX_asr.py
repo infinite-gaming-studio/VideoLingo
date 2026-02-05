@@ -3,14 +3,14 @@ VideoLingo WhisperX ASR Module
 Supports both local GPU processing and cloud-native remote processing
 
 Cloud Native Mode:
-- When cloud_native.enabled=true in config.yaml
+- When whisper.runtime='cloud' in config.yaml
 - All ASR processing is done via remote WhisperX cloud service
 - No local torch/whisperx dependencies required
 
 Local Mode (Legacy):
-- When cloud_native.enabled=false or not set
-- Uses local GPU for ASR processing
-- Requires torch, whisperx, and other GPU dependencies
+- When whisper.runtime='local' or 'elevenlabs'
+- Uses local GPU or ElevenLabs API for ASR processing
+- Requires torch, whisperx, and other GPU dependencies for local mode
 """
 
 import os
@@ -22,9 +22,13 @@ from core.utils import *
 
 # Check if cloud native mode is enabled
 def is_cloud_native():
-    """Check if cloud native mode is enabled in config"""
+    """Check if cloud native mode is enabled in config
+    Uses runtime='cloud'"""
     try:
-        return load_key("cloud_native.enabled", False)
+        # Cloud mode is enabled when runtime='cloud'
+        if load_key("whisper.runtime", "") == "cloud":
+            return True
+        return False
     except:
         return False
 
@@ -76,10 +80,9 @@ def transcribe_audio(raw_audio_file, vocal_audio_file, start, end):
     - Uses local GPU to run WhisperX
     """
     # Check if cloud native mode is enabled
-    if is_cloud_native() and load_key("cloud_native.features.asr", True):
+    if is_cloud_native():
         return transcribe_audio_cloud(raw_audio_file, vocal_audio_file, start, end)
-    else:
-        return transcribe_audio_local(raw_audio_file, vocal_audio_file, start, end)
+    return transcribe_audio_local(raw_audio_file, vocal_audio_file, start, end)
 
 
 def transcribe_audio_cloud(raw_audio_file, vocal_audio_file, start, end):

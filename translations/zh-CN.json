@@ -113,5 +113,13 @@
     "Cloud Service URL": "云端服务地址",
     "URL for both WhisperX and Demucs cloud services": "支持 WhisperX 和 Demucs 的统一云端地址",
     "Authentication Token": "认证 Token",
-    "Token for cloud services authentication": "用于访问云端服务的安全令牌"
+    "Token for cloud services authentication": "用于访问云端服务的安全令牌",
+    "Unified Cloud Service URL": "统一云端服务地址",
+    "Unified Authentication Token": "统一认证令牌",
+    "Unified cloud service URL for WhisperX ASR and Demucs separation (recommended)": "用于 WhisperX ASR 和 Demucs 人声分离的统一云端服务地址（推荐）",
+    "Unified authentication token for all cloud services (recommended)": "所有云端服务的统一认证令牌（推荐）",
+    "Legacy Configuration (Optional)": "旧版配置（可选）",
+    "You can use the unified config above, or set individual URLs below for backward compatibility": "可以使用上面的统一配置，也可以为了向后兼容设置下面的单独URL",
+    "Legacy: URL for WhisperX cloud service (optional if unified config is set)": "旧版：WhisperX 云端服务地址（如果已设置统一配置则可选）",
+    "Legacy: Token for WhisperX service (optional if unified config is set)": "旧版：WhisperX 服务令牌（如果已设置统一配置则可选）"
 }
