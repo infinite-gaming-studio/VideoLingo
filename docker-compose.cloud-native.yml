@@ -12,7 +12,7 @@ services:
       dockerfile: Dockerfile.cloud-native
       platforms:
         - linux/arm64
-    image: videolingo:cloud-native-arm64
+    image: videolingo-cloud-mamba:latest
     container_name: videolingo-cloud
     restart: unless-stopped
     
@@ -29,7 +29,7 @@ services:
       # 临时文件 / Temporary files
       - ./temp:/app/temp
       # 配置文件持久化 / Config file persistence
-      - ./config.yaml:/app/config.yaml:ro
+      - ./config.yaml:/app/config.yaml
       # 日志 / Logs
       - ./logs:/app/logs
     

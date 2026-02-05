@@ -1,78 +1,80 @@
 # VideoLingo Cloud Native - ARM64 (Apple Silicon) Optimized
-# 轻量级Docker镜像，仅包含CPU计算依赖
-# 所有GPU计算通过远程云服务完成
+# Mamba加速构建版本 / Mamba accelerated build version
 # Lightweight Docker image for CPU-only processing
-# All GPU computation done via remote cloud services
 
-FROM python:3.10-slim-bookworm
+FROM mambaorg/micromamba:1.5.10-bookworm-slim
+
+# 用户设置 / User setup
+USER root
 
 # 设置环境变量 / Set environment variables
+ENV ANTHROPIC_API_KEY="" 
+ENV OPENAI_API_KEY=""
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PIP_NO_CACHE_DIR=1
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV TZ=Asia/Shanghai
 
-# 安装基础依赖和FFmpeg / Install basic dependencies and FFmpeg
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 安装基础工具 / Install basic tools
+# 使用apt安装极少量必须的系统工具，大部分工具将通过mamba安装
+# Use apt for minimal system tools, most tools will be installed via mamba
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
-    xz-utils \
-    git \
-    build-essential \
-    libffi-dev \
-    libssl-dev \
     fonts-noto-cjk \
-    pkg-config \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    libgl1-mesa-glx \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-# 验证FFmpeg安装 / Verify FFmpeg installation
-RUN ffmpeg -version | head -1
 
 # 设置工作目录 / Set working directory
 WORKDIR /app
 
-# 复制依赖文件（使用云原生依赖）/ Copy dependency files (cloud-native)
+# 复制依赖文件 / Copy dependency files
+# 我们将动态根据 requirements_cloud.txt 生成环境文件，或直接使用预定义的 yml
+# Here we copy the pre-defined environment file
+COPY environment_cloud.yml /tmp/env.yaml
+
+# 创建 Conda 环境 / Create Conda environment
+# 使用 mamba 安装所有依赖 (系统库 + Python库)
+# Use mamba to install all dependencies (System libs + Python libs)
+RUN --mount=type=cache,target=/opt/conda/pkgs \
+    micromamba install -y -n base -f /tmp/env.yaml && \
+    micromamba clean --all --yes
+
+# 激活环境 / Activate environment
+ARG MAMBA_DOCKERFILE_ACTIVATE=1
+
+# 添加缓存失效机制 / Add cache invalidation mechanism
+# 当分支有新提交时，此ADD指令会失效缓存，触发重新克隆
+# This ADD instruction invalidates cache when the branch has new commits, triggering re-clone
+ADD https://api.github.com/repos/infinite-gaming-studio/VideoLingo/git/refs/heads/feature/arm64-docker /tmp/version.json
+
+# 克隆代码仓库 / Clone repository
+RUN git clone -b feature/arm64-docker https://github.com/infinite-gaming-studio/VideoLingo.git .
+
+# 安装剩余的 pip 依赖 / Install remaining pip dependencies
+# 这里安装 conda-forge 上没有的包
+# Install packages not available on conda-forge
 COPY requirements_cloud.txt /app/requirements_cloud.txt
-COPY requirements.txt /app/requirements.txt
-
-# 升级pip / Upgrade pip
-RUN pip install --upgrade pip setuptools wheel
-
-# 安装云原生依赖（轻量级，无PyTorch）/ Install cloud-native dependencies (lightweight, no PyTorch)
-RUN pip install -r requirements_cloud.txt
+RUN pip install --no-cache-dir -r requirements_cloud.txt
 
 # 下载Spacy模型 / Download Spacy models
-RUN python3 -m spacy download en_core_web_sm || true
-RUN python3 -m spacy download zh_core_web_sm || true
-
-# 复制项目代码 / Copy project code
-COPY . /app/
+RUN python -m spacy download en_core_web_sm || true
+RUN python -m spacy download zh_core_web_sm || true
 
 # 创建必要的目录 / Create necessary directories
 RUN mkdir -p /app/output /app/input /app/_model_cache /app/temp
 
-# 暴露Streamlit端口 / Expose Streamlit port
+# 暴露端口 / Expose port
 EXPOSE 8501
 
-# 设置环境变量 / Set environment variables
+# 环境变量配置 / Environment variables
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 ENV STREAMLIT_SERVER_HEADLESS=true
 ENV STREAMLIT_SERVER_ENABLE_CORS=false
 ENV STREAMLIT_SERVER_MAX_UPLOAD_SIZE=2000
-
-# 云原生模式配置 / Cloud-native mode configuration
 ENV CLOUD_NATIVE_MODE=true
-ENV PYTHONUNBUFFERED=1
-
-# 时区设置 / Timezone
-ENV TZ=Asia/Shanghai
 
 # 健康检查 / Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

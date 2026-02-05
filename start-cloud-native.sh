@@ -72,7 +72,7 @@ check_cloud_config() {
         
         # 检查云URL配置 / Check cloud URL configuration
         if grep -q "cloud_url:" config.yaml; then
-            CLOUD_URL=$(grep "cloud_url:" config.yaml | head -1 | sed 's/.*cloud_url: *//' | sed 's/["'"'"]//g' | tr -d ' ')
+            CLOUD_URL=$(grep "cloud_url:" config.yaml | head -1 | sed 's/.*cloud_url: *//' | tr -d '"' | tr -d "'" | tr -d ' ')
             if [ -n "$CLOUD_URL" ] && [ "$CLOUD_URL" != "''" ] && [ "$CLOUD_URL" != '""' ]; then
                 print_success "云服务URL配置: $CLOUD_URL"
                 print_info "请确保云服务正在运行 / Please ensure cloud service is running"
@@ -198,7 +198,7 @@ main() {
         build_image
     else
         # 检查镜像是否存在 / Check if image exists
-        if ! docker images | grep -q "videolingo.*cloud-native"; then
+        if ! docker images | grep -q "videolingo-cloud-mamba"; then
             print_info "首次运行，需要构建镜像... / First run, need to build image..."
             build_image
         else

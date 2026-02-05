@@ -107,7 +107,8 @@ def transcribe_audio_cloud(
     model: str = "large-v3",
     align: bool = True,
     speaker_diarization: bool = False,
-    timeout: int = DEFAULT_TIMEOUT
+    timeout: int = DEFAULT_TIMEOUT,
+    token: str = None
 ) -> Dict[str, Any]:
     """
     Transcribe audio segment using cloud WhisperX API
@@ -123,6 +124,7 @@ def transcribe_audio_cloud(
         align: Enable word-level alignment
         speaker_diarization: Enable speaker diarization
         timeout: Request timeout in seconds
+        token: Authentication token
     
     Returns:
         Dictionary with segments and word-level timestamps
@@ -140,6 +142,13 @@ def transcribe_audio_cloud(
     
     rprint(f"[green]🚀 Sending to cloud WhisperX:[/green] {url}")
     rprint(f"[cyan]⏱️ Segment:[/cyan] {start:.2f}s - {end:.2f}s")
+    
+    # auth headers
+    headers = {}
+    if not token:
+        token = os.getenv("WHISPERX_CLOUD_TOKEN")
+    if token:
+        headers['Authorization'] = f"Bearer {token}"
     
     last_error = None
     for attempt in range(MAX_RETRIES):
@@ -159,7 +168,8 @@ def transcribe_audio_cloud(
                     f"{url}/transcribe",
                     files=files,
                     data=data,
-                    timeout=timeout
+                    timeout=timeout,
+                    headers=headers
                 )
                 
                 if response.status_code != 200:
@@ -219,15 +229,27 @@ class WhisperXCloudClient:
     Provides a convenient interface for interacting with the cloud service
     """
     
-    def __init__(self, base_url: str = None):
+    def __init__(self, base_url: str = None, token: str = None):
         self.base_url = (base_url or get_cloud_url()).rstrip('/')
         if not self.base_url:
             raise ValueError("Cloud URL not configured. Set WHISPERX_CLOUD_URL environment variable or provide base_url")
         
         self.session = requests.Session()
-        self.session.headers.update({
-            'Accept': 'application/json'
-        })
+        headers = {'Accept': 'application/json'}
+        
+        # Get token from argument, env var, or config
+        if not token:
+            token = os.getenv("WHISPERX_CLOUD_TOKEN")
+            if not token:
+                try:
+                    token = load_key("whisper.whisperX_token", "")
+                except:
+                    pass
+        
+        if token:
+            headers['Authorization'] = f"Bearer {token}"
+            
+        self.session.headers.update(headers)
     
     def health_check(self) -> Dict[str, Any]:
         """Check server health"""
@@ -312,11 +334,13 @@ def transcribe_audio_cloud_compatible(
         whisper_language = load_key("whisper.language", "en")
         cloud_url = load_key("whisper.whisperX_cloud_url", "")
         model = load_key("whisper.model", "large-v3")
+        token = load_key("whisper.whisperX_token", "")
     except Exception as e:
         # Fallback to defaults
         whisper_language = "en"
         cloud_url = get_cloud_url()
         model = "large-v3"
+        token = None
     
     if not cloud_url:
         raise ValueError(
@@ -335,7 +359,8 @@ def transcribe_audio_cloud_compatible(
         end=end,
         cloud_url=cloud_url,
         language=whisper_language if whisper_language != 'auto' else None,
-        model=model
+        model=model,
+        token=token
     )
 
 

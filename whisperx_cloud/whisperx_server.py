@@ -44,12 +44,30 @@ sys.modules['torch'].load = _patched_torch_load
 import whisperx
 import librosa
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Security, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
 warnings.filterwarnings("ignore")
+
+# Security
+security = HTTPBearer()
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Verify the bearer token against environment variable"""
+    token = os.getenv("WHISPER_SERVER_TOKEN")
+    if not token:
+        # If no token is set in environment, allow all requests (or warn?)
+        # For security, let's say if variable is not set, we assume no auth needed? 
+        # Or better: check if it matches. 
+        # If WHISPER_SERVER_TOKEN is not set, we skip auth.
+        return True
+    
+    if credentials.credentials != token:
+        raise HTTPException(status_code=403, detail="Invalid authentication token")
+    return True
 
 # Global model cache
 model_cache = {}
@@ -206,7 +224,7 @@ async def health_check():
         platform=platform_str
     )
 
-@app.post("/transcribe", response_model=TranscriptionResponse)
+@app.post("/transcribe", response_model=TranscriptionResponse, dependencies=[Depends(verify_token)])
 async def transcribe(
     audio: UploadFile = File(..., description="Audio file (wav, mp3, m4a, etc.)"),
     language: Optional[str] = None,

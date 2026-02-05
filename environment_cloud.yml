@@ -1,0 +1,33 @@
+name: videolingo-cloud
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - ffmpeg
+  - git
+  - pip
+  - numpy=1.26.4
+  - pandas=2.2.3
+  - requests>=2.32.3
+  - pyyaml
+  - openpyxl
+  - rich
+  - spacy
+  - pip:
+    - pydub==0.25.1
+    - moviepy==1.0.3
+    - opencv-python==4.10.0.84
+    - librosa==0.10.2.post1
+    - resampy==0.4.3
+    - openai==1.55.3
+    - edge-tts
+    - streamlit==1.38.0
+    - yt-dlp
+    - json-repair
+    - ruamel.yaml
+    - InquirerPy
+    - autocorrect-py
+    - syllables
+    - pypinyin
+    - g2p-en
+    - xmltodict
