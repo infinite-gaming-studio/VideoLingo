@@ -448,7 +448,11 @@ app.include_router(separation_router)
 
 # ============== Main ==============
 
+def run_server(host="0.0.0.0", port=8000):
+    """Run the server (for programmatic use)"""
+    uvicorn.run(app, host=host, port=port)
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     host = os.environ.get("HOST", "0.0.0.0")
-    uvicorn.run(app, host=host, port=port)
+    run_server(host=host, port=port)
