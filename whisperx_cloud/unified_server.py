@@ -56,8 +56,8 @@ import uvicorn
 try:
     from demucs.pretrained import get_model
     from demucs.audio import save_audio
-    from demucs.api import Separator
-    from demucs.apply import BagOfModels
+    from demucs.apply import apply_model
+    from demucs.hdemucs import HDemucs
     DEMUC_AVAILABLE = True
 except ImportError:
     DEMUC_AVAILABLE = False
@@ -150,13 +150,15 @@ def get_or_load_demucs_model():
     """Load or retrieve cached Demucs model"""
     if not DEMUC_AVAILABLE:
         return None
-    
+
     if 'htdemucs' not in demucs_model_cache:
         print("📥 Loading Demucs model...")
         model = get_model('htdemucs')
+        model.eval()
+        model.to(device)
         demucs_model_cache['htdemucs'] = model
         print("✅ Demucs model loaded")
-    
+
     return demucs_model_cache['htdemucs']
 
 # ============== Audio Processing ==============
@@ -172,15 +174,6 @@ def process_audio(audio_bytes: bytes):
         return audio
     finally:
         os.unlink(tmp_path)
-
-# ============== Demucs Separator Class ==============
-
-class PreloadedSeparator(Separator):
-    def __init__(self, model: BagOfModels, shifts: int = 1, overlap: float = 0.25,
-                 split: bool = True, segment: Optional[int] = None, jobs: int = 0):
-        self._model, self._audio_channels, self._samplerate = model, model.audio_channels, model.samplerate
-        self.update_parameter(device=device, shifts=shifts, overlap=overlap, split=split,
-                            segment=segment, jobs=jobs, progress=True, callback=None, callback_arg=None)
 
 # ============== Lifespan ==============
 
@@ -340,26 +333,43 @@ async def separate_audio(
         
         try:
             model = get_or_load_demucs_model()
-            separator = PreloadedSeparator(model=model, shifts=1, overlap=0.25)
-            
+
             print("🎵 Separating audio...")
-            _, outputs = separator.separate_audio_file(input_path)
-            
+            # Load audio file
+            from torchaudio import load as torchaudio_load
+            wav, sr = torchaudio_load(input_path)
+            wav = wav.to(device)
+
+            # Apply separation
+            with torch.no_grad():
+                # wav shape: [channels, time]
+                # add batch dimension for demucs: [batch, channels, time]
+                wav = wav.unsqueeze(0)
+                sources = apply_model(model, wav, device=device, shifts=1, split=True, overlap=0.25)
+                # sources shape: [batch, sources, channels, time]
+                sources = sources.squeeze(0).cpu()  # Remove batch dimension
+
+            # Get source names from the model
+            # For htdemucs: drums, bass, other, vocals
+            sources_dict = {}
+            for i, src_name in enumerate(model.sources):
+                sources_dict[src_name] = sources[i]
+
             kwargs = {
                 "samplerate": model.samplerate, "bitrate": 128, "preset": 2,
                 "clip": "rescale", "as_float": False, "bits_per_sample": 16
             }
-            
+
             # Save vocals
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_v:
                 vocals_path = tmp_v.name
-            save_audio(outputs['vocals'].cpu(), vocals_path, **kwargs)
-            
-            # Save background
+            save_audio(sources_dict['vocals'], vocals_path, **kwargs)
+
+            # Save background (everything except vocals)
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_b:
                 bg_path = tmp_b.name
-            background = sum(audio for src, audio in outputs.items() if src != 'vocals')
-            save_audio(background.cpu(), bg_path, **kwargs)
+            background = sum(sources_dict[src] for src in sources_dict if src != 'vocals')
+            save_audio(background, bg_path, **kwargs)
             
             # Encode to base64
             vocals_base64 = None
@@ -372,7 +382,7 @@ async def separate_audio(
                     background_base64 = base64.b64encode(f.read()).decode('utf-8')
             
             # Cleanup
-            del outputs, background, separator
+            del sources, sources_dict, background
             gc.collect()
             if device == "cuda":
                 torch.cuda.empty_cache()
