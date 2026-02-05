@@ -121,5 +121,14 @@
     "Legacy Configuration (Optional)": "旧版配置（可选）",
     "You can use the unified config above, or set individual URLs below for backward compatibility": "可以使用上面的统一配置，也可以为了向后兼容设置下面的单独URL",
     "Legacy: URL for WhisperX cloud service (optional if unified config is set)": "旧版：WhisperX 云端服务地址（如果已设置统一配置则可选）",
-    "Legacy: Token for WhisperX service (optional if unified config is set)": "旧版：WhisperX 服务令牌（如果已设置统一配置则可选）"
+    "Legacy: Token for WhisperX service (optional if unified config is set)": "旧版：WhisperX 服务令牌（如果已设置统一配置则可选）",
+    "Config Management": "配置管理",
+    "Export Config": "导出配置",
+    "Export as YAML (.yaml) ⬇️": "导出为 YAML (.yaml) ⬇️",
+    "Import Config": "导入配置",
+    "Upload Config File": "上传配置文件",
+    "Support .yaml, .yml, or .json files": "支持 .yaml, .yml 或 .json 文件",
+    "Local runtime requires a GPU with at least 8GB memory (e.g. RTX 3060). If yours is insufficient, please use cloud mode.": "本地运行需要至少 8GB 显存的 GPU (如 RTX 3060)。如果您的显存不足，请使用云端模式。",
+    "Unified cloud service URL for WhisperX ASR and Demucs separation": "用于 WhisperX ASR 和 Demucs 分离的统一云端服务 URL",
+    "Unified authentication token for all cloud services": "所有云端服务的统一身份验证令牌"
 }

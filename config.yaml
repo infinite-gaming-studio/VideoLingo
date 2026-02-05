@@ -33,10 +33,6 @@ whisper:
   # - cloud: 使用云端服务 (配置 cloud_native 或 whisperX_cloud_url)
   runtime: 'local'
 
-  # WhisperX 云端服务 URL (旧配置，推荐使用 cloud_native)
-  whisperX_cloud_url: ''
-  # WhisperX API token (用于远程 GPU 服务器验证, 旧配置，推荐使用 cloud_native)
-  whisperX_token: ''
   # ElevenLabs API key
   elevenlabs_api_key: ''
 

@@ -45,7 +45,7 @@ def is_cloud_separation_enabled():
 
 def get_cloud_url() -> str:
     """Get cloud URL from environment or config
-    Priority: DEMUCS_CLOUD_URL env > cloud_native.cloud_url > whisper.whisperX_cloud_url"""
+    Priority: DEMUCS_CLOUD_URL env > cloud_native.cloud_url"""
     if DEMUCS_CLOUD_URL:
         return DEMUCS_CLOUD_URL.rstrip('/')
     
@@ -53,11 +53,6 @@ def get_cloud_url() -> str:
         from core.utils import load_key
         # Unified cloud_native configuration (recommended)
         url = load_key("cloud_native.cloud_url", "")
-        if url:
-            return url.rstrip('/')
-        
-        # Legacy whisper configuration (backward compatibility)
-        url = load_key("whisper.whisperX_cloud_url", "")
         if url:
             return url.rstrip('/')
     except:

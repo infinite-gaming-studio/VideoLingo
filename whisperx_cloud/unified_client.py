@@ -32,22 +32,14 @@ RETRY_DELAY = 5
 
 def get_cloud_url() -> str:
     """Get cloud URL from environment or config
-    Priority: CLOUD_URL env > cloud_native.cloud_url > whisper.whisperX_cloud_url"""
+    Priority: CLOUD_URL env > cloud_native.cloud_url"""
     url = os.getenv("CLOUD_URL", "")
     if url:
         return url.rstrip('/')
     
-    # Unified cloud_native configuration (recommended)
+    # Unified cloud_native configuration
     try:
         url = load_key("cloud_native.cloud_url", "")
-        if url:
-            return url.rstrip('/')
-    except:
-        pass
-    
-    # Legacy whisper configuration (backward compatibility)
-    try:
-        url = load_key("whisper.whisperX_cloud_url", "")
         if url:
             return url.rstrip('/')
     except:
@@ -58,22 +50,14 @@ def get_cloud_url() -> str:
 
 def get_cloud_token() -> str:
     """Get cloud token from environment or config
-    Priority: WHISPERX_CLOUD_TOKEN env > cloud_native.token > whisper.whisperX_token"""
+    Priority: WHISPERX_CLOUD_TOKEN env > cloud_native.token"""
     token = os.getenv("WHISPERX_CLOUD_TOKEN", "")
     if token:
         return token
     
-    # Unified cloud_native configuration (recommended)
+    # Unified cloud_native configuration
     try:
         token = load_key("cloud_native.token", "")
-        if token:
-            return token
-    except:
-        pass
-    
-    # Legacy whisper configuration (backward compatibility)
-    try:
-        token = load_key("whisper.whisperX_token", "")
         if token:
             return token
     except:
@@ -148,12 +132,7 @@ def transcribe_audio_cloud(
     # auth headers
     headers = {}
     if not token:
-        token = os.getenv("WHISPERX_CLOUD_TOKEN")
-        if not token:
-            try:
-                token = load_key("whisper.whisperX_token", "")
-            except:
-                pass
+        token = get_cloud_token()
     if token:
         headers['Authorization'] = f"Bearer {token}"
     
@@ -248,12 +227,7 @@ def separate_audio_cloud(
     # auth headers
     headers = {}
     if not token:
-        token = os.getenv("WHISPERX_CLOUD_TOKEN")
-        if not token:
-            try:
-                token = load_key("whisper.whisperX_token", "")
-            except:
-                pass
+        token = get_cloud_token()
     if token:
         headers['Authorization'] = f"Bearer {token}"
 
@@ -333,12 +307,7 @@ class UnifiedCloudClient:
 
         # Get token
         if not token:
-            token = os.getenv("WHISPERX_CLOUD_TOKEN")
-            if not token:
-                try:
-                    token = load_key("whisper.whisperX_token", "")
-                except:
-                    pass
+            token = get_cloud_token()
         
         if token:
             headers['Authorization'] = f"Bearer {token}"
@@ -432,7 +401,7 @@ def transcribe_audio_cloud_compatible(
     
     if not cloud_url:
         raise ValueError(
-            "Cloud URL not configured. Set cloud_native.cloud_url or whisper.whisperX_cloud_url in config.yaml\n"
+            "Cloud URL not configured. Set cloud_native.cloud_url in config.yaml\n"
             "or set CLOUD_URL environment variable."
         )
     
@@ -460,7 +429,7 @@ def separate_audio_cloud_compatible(
     
     if not cloud_url:
         raise ValueError(
-            "Cloud URL not configured. Set cloud_native.cloud_url or whisper.whisperX_cloud_url in config.yaml\n"
+            "Cloud URL not configured. Set cloud_native.cloud_url in config.yaml\n"
             "or set CLOUD_URL environment variable."
         )
     

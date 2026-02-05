@@ -95,6 +95,8 @@ def parallel_split_sentences(sentences, max_length, max_workers, nlp, retry_atte
                 future = executor.submit(split_sentence, sentence, num_parts, max_length, index=index, retry_attempt=retry_attempt)
                 futures.append((future, index, num_parts, sentence))
             else:
+                if retry_attempt == 0:
+                    console.print(f"[grey]Sentence {index} is short ({len(tokens)} tokens), skip splitting.[/grey]")
                 new_sentences[index] = [sentence]
 
         for future, index, num_parts, sentence in futures:
