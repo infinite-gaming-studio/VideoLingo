@@ -122,11 +122,23 @@ def test_health_check() -> bool:
         return False
 
 
-def test_asr_service(audio_file: str, output_dir: Path) -> bool:
-    """Test WhisperX ASR service"""
+def test_asr_service(audio_file: str, output_dir: Path, use_vocals: bool = False) -> bool:
+    """Test WhisperX ASR service
+
+    Args:
+        audio_file: Path to audio file
+        output_dir: Output directory for results
+        use_vocals: If True, use vocals audio file for transcription
+    """
     rprint("\n" + "=" * 60)
     rprint("[bold cyan]🎤 Testing WhisperX ASR Service[/bold cyan]")
-    rprint("=" * 60)
+    if use_vocals:
+        vocals_file = output_dir / "separation_vocals.mp3"
+        if os.path.exists(vocals_file):
+            audio_file = str(vocals_file)
+            rprint("[yellow]🎵 Using separated vocals for transcription[/yellow]")
+        else:
+            rprint("[yellow]⚠️ Vocals file not found, using original audio[/yellow]")
 
     if not os.path.exists(audio_file):
         rprint(f"[red]❌ Audio file not found:[/red] {audio_file}")
@@ -297,26 +309,30 @@ def main():
         rprint(f"[yellow]Please ensure the file exists in the project root directory[/yellow]")
         return
 
-    # Extract audio from video
-    output_dir = Path("../demo/test_output")
+    # Setup directories
+    input_dir = Path("input")
+    output_dir = Path("output")
+    input_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
-    audio_file = output_dir / "test_audio.wav"
+
+    # Extract audio from video (save to input directory)
+    audio_file = input_dir / "test_audio.wav"
 
     if not extract_audio_from_video(VIDEO_FILE, str(audio_file)):
         rprint("[red]❌ Failed to extract audio, skipping tests[/red]")
         return
 
-    # Run tests
+    # Run tests (following VideoLingo pipeline order)
     results = {}
 
     # Test 1: Health Check
     results['health_check'] = test_health_check()
 
-    # Test 2: ASR Service
-    results['asr'] = test_asr_service(str(audio_file), output_dir)
-
-    # Test 3: Separation Service
+    # Test 2: Separation Service (Demucs - vocal separation first)
     results['separation'] = test_separation_service(str(audio_file), output_dir)
+
+    # Test 3: ASR Service (WhisperX - use separated vocals for better transcription)
+    results['asr'] = test_asr_service(str(audio_file), output_dir, use_vocals=True)
 
     # Summary
     rprint("\n" + "=" * 60)
@@ -335,11 +351,13 @@ def main():
         rprint("[bold red]⚠️ Some tests failed![/bold red]")
     rprint("=" * 60)
 
-    rprint(f"\n[cyan]📁 All test outputs saved to:[/cyan] {output_dir}")
-    rprint(f"[cyan]  - test_audio.wav (extracted audio)[/cyan]")
-    rprint(f"[cyan]  - asr_transcription.json (ASR result)[/cyan]")
-    rprint(f"[cyan]  - separation_vocals.mp3 (vocals)[/cyan]")
-    rprint(f"[cyan]  - separation_background.mp3 (background)[/cyan]")
+    rprint(f"\n[cyan]📁 Test file locations:[/cyan]")
+    rprint(f"[cyan]  Input files:[/cyan] {input_dir}")
+    rprint(f"[cyan]    - test_audio.wav (extracted audio)[/cyan]")
+    rprint(f"[cyan]  Output files:[/cyan] {output_dir}")
+    rprint(f"[cyan]    - asr_transcription.json (ASR result)[/cyan]")
+    rprint(f"[cyan]    - separation_vocals.mp3 (vocals)[/cyan]")
+    rprint(f"[cyan]    - separation_background.mp3 (background)[/cyan]")
 
 
 if __name__ == "__main__":

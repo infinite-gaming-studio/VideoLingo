@@ -155,6 +155,10 @@ cython_debug/
 /history/
 _model_cache/
 
+# test input/output files
+test/output/
+test/input/
+
 batch/input/
 batch/output/
 batch/tasks_setting.xlsx
