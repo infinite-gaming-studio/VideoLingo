@@ -2,10 +2,8 @@ services:
   videolingo:
     build:
       context: .
-      dockerfile: Dockerfile.arm64
-      args:
-        PYTHON_VERSION: "3.10"
-    image: videolingo:arm64
+      dockerfile: Dockerfile
+    image: videolingo:latest
     container_name: videolingo
     restart: unless-stopped
     
@@ -70,24 +68,5 @@ services:
       retries: 3
       start_period: 60s
 
-  # 可选: WhisperX云端服务
-  whisperx-cloud:
-    build:
-      context: ./whisperx_cloud
-      dockerfile: Dockerfile.arm64
-    image: whisperx-cloud:arm64
-    container_name: whisperx-cloud
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./models:/app/models
-    environment:
-      - DEVICE=cpu
-      - COMPUTETYPE=int8
-      - WHISPER_MODEL=large-v3
-    platform: linux/arm64
-    profiles:
-      - whisperx
 
 
