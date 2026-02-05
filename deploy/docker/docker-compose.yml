@@ -33,13 +33,13 @@ services:
       - "8501:8501"
     
     volumes:
-      - ./deploy_instance/input:/app/input
-      - ./deploy_instance/output:/app/output
-      - ./deploy_instance/_model_cache:/app/_model_cache
-      - ./deploy_instance/temp:/app/temp
-      - ./deploy_instance/config.yaml:/app/config.yaml
-      - ./deploy_instance/custom_terms.xlsx:/app/custom_terms.xlsx
-      - ./deploy_instance/logs:/app/logs
+      - ../../deploy_instance/input:/app/input
+      - ../../deploy_instance/output:/app/output
+      - ../../deploy_instance/_model_cache:/app/_model_cache
+      - ../../deploy_instance/temp:/app/temp
+      - ../../deploy_instance/config.yaml:/app/config.yaml
+      - ../../deploy_instance/custom_terms.xlsx:/app/custom_terms.xlsx
+      - ../../deploy_instance/logs:/app/logs
 
     environment:
       - STREAMLIT_SERVER_PORT=8501
