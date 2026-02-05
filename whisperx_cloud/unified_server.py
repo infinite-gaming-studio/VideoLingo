@@ -47,7 +47,8 @@ sys.modules['torch'].load = _patched_torch_load
 import whisperx
 import librosa
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, HTTPException, APIRouter
+from fastapi import FastAPI, File, UploadFile, HTTPException, APIRouter, Security, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
@@ -82,6 +83,22 @@ def get_device():
         return "mps", "float16"
     else:
         return "cpu", "int8"
+
+# Security
+security = HTTPBearer()
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Verify the bearer token against environment variable"""
+    # Accept both variants for compatibility
+    token = os.getenv("WHISPER_SERVER_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
+    if not token:
+        # If no token is set in environment, allow all requests for backward compatibility
+        # but print a warning on first hit?
+        return True
+    
+    if credentials.credentials != token:
+        raise HTTPException(status_code=403, detail="Invalid authentication token")
+    return True
 
 # ============== Pydantic Models ==============
 
@@ -235,7 +252,7 @@ app.add_middleware(
 # ASR Router
 asr_router = APIRouter(prefix="/asr", tags=["ASR - WhisperX"])
 
-@asr_router.post("/transcribe", response_model=TranscriptionResponse)
+@asr_router.post("/transcribe", response_model=TranscriptionResponse, dependencies=[Depends(verify_token)])
 async def transcribe(
     audio: UploadFile = File(...),
     language: Optional[str] = None,
@@ -314,7 +331,7 @@ async def transcribe(
 # Separation Router
 separation_router = APIRouter(prefix="/separation", tags=["Separation - Demucs"])
 
-@separation_router.post("/separate", response_model=SeparationResponse)
+@separation_router.post("/separate", response_model=SeparationResponse, dependencies=[Depends(verify_token)])
 async def separate_audio(
     audio: UploadFile = File(...),
     return_files: bool = True
@@ -459,7 +476,7 @@ async def health_check():
         platform=platform_str
     )
 
-@app.delete("/cache")
+@app.delete("/cache", dependencies=[Depends(verify_token)])
 async def clear_cache():
     """Clear all model caches"""
     whisper_model_cache.clear()

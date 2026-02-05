@@ -21,17 +21,17 @@ services:
     
     volumes:
       # 输入视频文件夹 / Input video folder
-      - ./input:/app/input
+      - ./deploy_instance/input:/app/input
       # 输出结果文件夹 / Output results folder
-      - ./output:/app/output
+      - ./deploy_instance/output:/app/output
       # 模型缓存文件夹（轻量级模型）/ Model cache folder (lightweight models)
-      - ./_model_cache:/app/_model_cache
+      - ./deploy_instance/_model_cache:/app/_model_cache
       # 临时文件 / Temporary files
-      - ./temp:/app/temp
+      - ./deploy_instance/temp:/app/temp
       # 配置文件持久化 / Config file persistence
-      - ./config.yaml:/app/config.yaml
+      - ./deploy_instance/config.yaml:/app/config.yaml
       # 日志 / Logs
-      - ./logs:/app/logs
+      - ./deploy_instance/logs:/app/logs
     
     environment:
       # Streamlit配置 / Streamlit configuration

@@ -94,7 +94,8 @@ def separate_audio_cloud(
     vocals_output: str,
     background_output: str,
     cloud_url: str = None,
-    timeout: int = DEFAULT_TIMEOUT
+    timeout: int = DEFAULT_TIMEOUT,
+    token: str = None
 ) -> bool:
     """
     Separate audio using cloud Demucs API
@@ -117,8 +118,19 @@ def separate_audio_cloud(
     if not os.path.exists(audio_file):
         raise FileNotFoundError(f"Audio file not found: {audio_file}")
     
-    rprint(f"[green]🚀 Sending to cloud Demucs:[/green] {url}")
     rprint(f"[cyan]Input:[/cyan] {audio_file}")
+    
+    # auth headers
+    headers = {}
+    if not token:
+        token = os.getenv("WHISPERX_CLOUD_TOKEN")
+        if not token:
+            try:
+                token = load_key("whisper.whisperX_token", "")
+            except:
+                pass
+    if token:
+        headers['Authorization'] = f"Bearer {token}"
     
     last_error = None
     for attempt in range(MAX_RETRIES):
@@ -133,7 +145,8 @@ def separate_audio_cloud(
                     f"{url}/separate",
                     files=files,
                     data=data,
-                    timeout=timeout
+                    timeout=timeout,
+                    headers=headers
                 )
                 
                 if response.status_code != 200:
@@ -191,15 +204,27 @@ class DemucsCloudClient:
     Provides a convenient interface for interacting with the cloud service
     """
     
-    def __init__(self, base_url: str = None):
+    def __init__(self, base_url: str = None, token: str = None):
         self.base_url = (base_url or get_cloud_url()).rstrip('/')
         if not self.base_url:
             raise ValueError("Cloud URL not configured. Set DEMUCS_CLOUD_URL environment variable or provide base_url")
         
         self.session = requests.Session()
-        self.session.headers.update({
-            'Accept': 'application/json'
-        })
+        headers = {'Accept': 'application/json'}
+
+        # Get token
+        if not token:
+            token = os.getenv("WHISPERX_CLOUD_TOKEN")
+            if not token:
+                try:
+                    token = load_key("whisper.whisperX_token", "")
+                except:
+                    pass
+        
+        if token:
+            headers['Authorization'] = f"Bearer {token}"
+            
+        self.session.headers.update(headers)
     
     def health_check(self) -> Dict[str, Any]:
         """Check server health"""
@@ -228,7 +253,8 @@ class DemucsCloudClient:
             vocals_output=vocals_output,
             background_output=background_output,
             cloud_url=self.base_url,
-            timeout=timeout
+            timeout=timeout,
+            token=self.session.headers.get('Authorization', '').replace('Bearer ', '') if 'Authorization' in self.session.headers else None
         )
     
     def clear_cache(self) -> Dict[str, Any]:
@@ -261,8 +287,10 @@ def separate_audio_cloud_compatible(
     # Get config from VideoLingo
     try:
         cloud_url = load_key("demucs_cloud_url", "")
+        token = load_key("whisper.whisperX_token", "")
     except Exception as e:
         cloud_url = get_cloud_url()
+        token = None
     
     if not cloud_url:
         raise ValueError(
@@ -276,7 +304,8 @@ def separate_audio_cloud_compatible(
         audio_file=raw_audio_file,
         vocals_output=vocals_output,
         background_output=background_output,
-        cloud_url=cloud_url
+        cloud_url=cloud_url,
+        token=token
     )
 
 

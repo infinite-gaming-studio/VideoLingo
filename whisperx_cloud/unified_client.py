@@ -93,7 +93,8 @@ def transcribe_audio_cloud(
     model: str = "large-v3",
     align: bool = True,
     speaker_diarization: bool = False,
-    timeout: int = DEFAULT_TIMEOUT
+    timeout: int = DEFAULT_TIMEOUT,
+    token: str = None
 ) -> Dict[str, Any]:
     """Transcribe audio using cloud ASR service"""
     url = cloud_url or get_cloud_url()
@@ -106,8 +107,19 @@ def transcribe_audio_cloud(
     if not os.path.exists(audio_file):
         raise FileNotFoundError(f"Audio file not found: {audio_file}")
     
-    rprint(f"[green]🚀 Sending to cloud ASR:[/green] {url}/asr/transcribe")
     rprint(f"[cyan]⏱️ Segment:[/cyan] {start:.2f}s - {end:.2f}s")
+    
+    # auth headers
+    headers = {}
+    if not token:
+        token = os.getenv("WHISPERX_CLOUD_TOKEN")
+        if not token:
+            try:
+                token = load_key("whisper.whisperX_token", "")
+            except:
+                pass
+    if token:
+        headers['Authorization'] = f"Bearer {token}"
     
     last_error = None
     for attempt in range(MAX_RETRIES):
@@ -125,7 +137,8 @@ def transcribe_audio_cloud(
                     f"{url}/asr/transcribe",
                     files=files,
                     data=data,
-                    timeout=timeout
+                    timeout=timeout,
+                    headers=headers
                 )
                 
                 if response.status_code != 200:
@@ -182,7 +195,8 @@ def separate_audio_cloud(
     vocals_output: str,
     background_output: str,
     cloud_url: str = None,
-    timeout: int = DEFAULT_TIMEOUT
+    timeout: int = DEFAULT_TIMEOUT,
+    token: str = None
 ) -> bool:
     """Separate audio using cloud separation service"""
     url = cloud_url or get_cloud_url()
@@ -193,9 +207,20 @@ def separate_audio_cloud(
     if not os.path.exists(audio_file):
         raise FileNotFoundError(f"Audio file not found: {audio_file}")
     
-    rprint(f"[green]🚀 Sending to cloud separation:[/green] {url}/separation/separate")
     rprint(f"[cyan]Input:[/cyan] {audio_file}")
     
+    # auth headers
+    headers = {}
+    if not token:
+        token = os.getenv("WHISPERX_CLOUD_TOKEN")
+        if not token:
+            try:
+                token = load_key("whisper.whisperX_token", "")
+            except:
+                pass
+    if token:
+        headers['Authorization'] = f"Bearer {token}"
+
     last_error = None
     for attempt in range(MAX_RETRIES):
         try:
@@ -207,7 +232,8 @@ def separate_audio_cloud(
                     f"{url}/separation/separate",
                     files=files,
                     data=data,
-                    timeout=timeout
+                    timeout=timeout,
+                    headers=headers
                 )
                 
                 if response.status_code != 200:
@@ -261,13 +287,27 @@ def separate_audio_cloud(
 class UnifiedCloudClient:
     """Unified client for VideoLingo Cloud API"""
     
-    def __init__(self, base_url: str = None):
+    def __init__(self, base_url: str = None, token: str = None):
         self.base_url = (base_url or get_cloud_url()).rstrip('/')
         if not self.base_url:
             raise ValueError("Cloud URL not configured")
         
         self.session = requests.Session()
-        self.session.headers.update({'Accept': 'application/json'})
+        headers = {'Accept': 'application/json'}
+
+        # Get token
+        if not token:
+            token = os.getenv("WHISPERX_CLOUD_TOKEN")
+            if not token:
+                try:
+                    token = load_key("whisper.whisperX_token", "")
+                except:
+                    pass
+        
+        if token:
+            headers['Authorization'] = f"Bearer {token}"
+            
+        self.session.headers.update(headers)
     
     def health_check(self) -> Dict[str, Any]:
         """Check server health"""
@@ -316,7 +356,8 @@ class UnifiedCloudClient:
             vocals_output=vocals_output,
             background_output=background_output,
             cloud_url=self.base_url,
-            timeout=timeout
+            timeout=timeout,
+            token=self.session.headers.get('Authorization', '').replace('Bearer ', '') if 'Authorization' in self.session.headers else None
         )
     
     def clear_cache(self) -> Dict[str, Any]:
@@ -346,10 +387,12 @@ def transcribe_audio_cloud_compatible(
         whisper_language = load_key("whisper.language", "en")
         cloud_url = load_key("whisper.whisperX_cloud_url", "")
         model = load_key("whisper.model", "large-v3")
+        token = load_key("whisper.whisperX_token", "")
     except Exception as e:
         whisper_language = "en"
         cloud_url = get_cloud_url()
         model = "large-v3"
+        token = None
     
     if not cloud_url:
         raise ValueError(
@@ -364,7 +407,8 @@ def transcribe_audio_cloud_compatible(
         end=end,
         cloud_url=cloud_url,
         language=whisper_language if whisper_language != 'auto' else None,
-        model=model
+        model=model,
+        token=token
     )
 
 
@@ -378,8 +422,10 @@ def separate_audio_cloud_compatible(
         cloud_url = load_key("demucs_cloud_url", "")
         if not cloud_url:
             cloud_url = load_key("whisper.whisperX_cloud_url", "")
+        token = load_key("whisper.whisperX_token", "")
     except Exception as e:
         cloud_url = get_cloud_url()
+        token = None
     
     if not cloud_url:
         raise ValueError(
@@ -391,7 +437,8 @@ def separate_audio_cloud_compatible(
         audio_file=raw_audio_file,
         vocals_output=vocals_output,
         background_output=background_output,
-        cloud_url=cloud_url
+        cloud_url=cloud_url,
+        token=token
     )
 
 

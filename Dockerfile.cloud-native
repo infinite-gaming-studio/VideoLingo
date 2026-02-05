@@ -41,26 +41,17 @@ RUN --mount=type=cache,target=/opt/conda/pkgs \
     micromamba install -y -n base -f /tmp/env.yaml && \
     micromamba clean --all --yes
 
-# 激活环境 / Activate environment
-ARG MAMBA_DOCKERFILE_ACTIVATE=1
-
-# 添加缓存失效机制 / Add cache invalidation mechanism
-# 当分支有新提交时，此ADD指令会失效缓存，触发重新克隆
-# This ADD instruction invalidates cache when the branch has new commits, triggering re-clone
-ADD https://api.github.com/repos/infinite-gaming-studio/VideoLingo/git/refs/heads/feature/arm64-docker /tmp/version.json
-
-# 克隆代码仓库 / Clone repository
-RUN git clone -b feature/arm64-docker https://github.com/infinite-gaming-studio/VideoLingo.git .
+# 复制本地代码 / Copy local code
+COPY . .
 
 # 安装剩余的 pip 依赖 / Install remaining pip dependencies
 # 这里安装 conda-forge 上没有的包
-# Install packages not available on conda-forge
 COPY requirements_cloud.txt /app/requirements_cloud.txt
-RUN pip install --no-cache-dir -r requirements_cloud.txt
+RUN micromamba run -n base pip install --no-cache-dir -r requirements_cloud.txt
 
 # 下载Spacy模型 / Download Spacy models
-RUN python -m spacy download en_core_web_sm || true
-RUN python -m spacy download zh_core_web_sm || true
+RUN micromamba run -n base python -m spacy download en_core_web_sm || true
+RUN micromamba run -n base python -m spacy download zh_core_web_sm || true
 
 # 创建必要的目录 / Create necessary directories
 RUN mkdir -p /app/output /app/input /app/_model_cache /app/temp

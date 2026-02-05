@@ -147,6 +147,11 @@ def transcribe_audio_cloud(
     headers = {}
     if not token:
         token = os.getenv("WHISPERX_CLOUD_TOKEN")
+        if not token:
+            try:
+                token = load_key("whisper.whisperX_token", "")
+            except:
+                pass
     if token:
         headers['Authorization'] = f"Bearer {token}"
     

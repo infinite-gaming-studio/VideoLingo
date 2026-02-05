@@ -180,3 +180,4 @@ demo/
 runtime/
 dev/
 installer_files/
+/deploy_instance/

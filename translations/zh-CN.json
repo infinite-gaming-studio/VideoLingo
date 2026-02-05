@@ -105,7 +105,8 @@
     "Detected NVIDIA GPU(s)": "检测到NVIDIA GPU",
     "No NVIDIA GPU detected": "未检测到NVIDIA GPU",
     "No NVIDIA GPU detected or NVIDIA drivers not properly installed": "未检测到NVIDIA GPU或NVIDIA驱动未正确安装",
-    "LLM JSON Format Support": "LLM JSON格式支持",
-    "Enable if your LLM supports JSON mode output": "如果选用的LLM支持JSON模式输出，请启用"
+    "LLM JSON Format Support": "LLM JSON Format Support",
+    "Enable if your LLM supports JSON mode output": "如果选用的LLM支持JSON模式输出，请启用",
+    "WhisperX Token": "WhisperX Token (用于云端验证)",
+    "WhisperX Cloud URL": "WhisperX 云端服务地址"
 }
-

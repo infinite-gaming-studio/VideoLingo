@@ -4,6 +4,7 @@ from translations.translations import DISPLAY_LANGUAGES
 import json
 import yaml as pyyaml # For safe dumping logic if needed
 from ruamel.yaml import YAML
+import time
 from core.utils import *
 
 def config_input(label, key, help=None):
@@ -15,65 +16,66 @@ def config_input(label, key, help=None):
 
 def page_setting():
     
-    # Config Import/Export
+    # Config Management
     with st.expander(t("Config Management"), expanded=False):
-        c1, c2 = st.columns(2)
-        with c1:
-            # Export
-            try:
-                # Define keys to export (only those present in sidebar)
-                SIDEBAR_KEYS = [
-                    "display_language",
-                    "api.key", "api.base_url", "api.model", "api.llm_support_json",
-                    "whisper.language", "whisper.runtime", "whisper.whisperX_302_api_key", "whisper.elevenlabs_api_key",
-                    "target_language",
-                    "demucs",
-                    "burn_subtitles",
-                    "tts_method",
-                    "sf_fish_tts.api_key", "sf_fish_tts.mode", "sf_fish_tts.voice",
-                    "openai_tts.api_key", "openai_tts.voice",
-                    "fish_tts.api_key", "fish_tts.character",
-                    "azure_tts.api_key", "azure_tts.voice",
-                    "gpt_sovits.character", "gpt_sovits.refer_mode",
-                    "edge_tts.voice",
-                    "sf_cosyvoice2.api_key",
-                    "f5tts.302_api"
-                ]
+        # 1. Export Section
+        st.subheader(t("Export Config"))
+        try:
+            SIDEBAR_KEYS = [
+                "display_language",
+                "api.key", "api.base_url", "api.model", "api.llm_support_json",
+                "whisper.language", "whisper.runtime", "whisper.whisperX_cloud_url", "whisper.whisperX_token", "whisper.whisperX_302_api_key", "whisper.elevenlabs_api_key",
+                "target_language", "demucs", "burn_subtitles", "tts_method",
+                "sf_fish_tts.api_key", "sf_fish_tts.mode", "sf_fish_tts.voice",
+                "openai_tts.api_key", "openai_tts.voice",
+                "fish_tts.api_key", "fish_tts.character",
+                "azure_tts.api_key", "azure_tts.voice",
+                "gpt_sovits.character", "gpt_sovits.refer_mode",
+                "edge_tts.voice", "sf_cosyvoice2.api_key", "f5tts.302_api"
+            ]
 
-                # Helper to build partial config
-                partial_config = {}
-                for key in SIDEBAR_KEYS:
-                    try:
-                        val = load_key(key)
-                        # Reconstruct nested dict structure
-                        keys = key.split('.')
-                        curr = partial_config
-                        for k in keys[:-1]:
-                            if k not in curr:
-                                curr[k] = {}
-                            curr = curr[k]
-                        curr[keys[-1]] = val
-                    except Exception:
-                        pass # Skip missing keys
-
-                json_config = json.dumps(partial_config, indent=4, ensure_ascii=False)
-                st.download_button(
-                    label=t("Export Config ⬇️"),
-                    data=json_config,
-                    file_name="videolingo_config.json",
-                    mime="application/json",
-                )
-            except Exception as e:
-                st.error(f"Export failed: {e}")
-
-        with c2:
-            # Import
-            uploaded_file = st.file_uploader(t("Import Config ⬆️"), type=["json"])
-            if uploaded_file is not None:
+            partial_config = {}
+            for key in SIDEBAR_KEYS:
                 try:
+                    val = load_key(key)
+                    keys = key.split('.')
+                    curr = partial_config
+                    for k in keys[:-1]:
+                        if k not in curr: curr[k] = {}
+                        curr = curr[k]
+                    curr[keys[-1]] = val
+                except: pass
+
+            # Export as YAML (preferred) or JSON
+            yaml_output = pyyaml.dump(partial_config, allow_unicode=True, sort_keys=False)
+            
+            st.download_button(
+                label=t("Export as YAML (.yaml) ⬇️"),
+                data=yaml_output,
+                file_name="videolingo_config.yaml",
+                mime="text/yaml",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.error(f"Export failed: {e}")
+
+        st.divider()
+
+        # 2. Import Section
+        st.subheader(t("Import Config"))
+        uploaded_file = st.file_uploader(t("Upload Config File"), type=["json", "yaml", "yml"], help=t("Support .yaml, .yml, or .json files"))
+        
+        if uploaded_file is not None:
+            # Preview and Confirm logic
+            file_type = uploaded_file.name.split('.')[-1].lower()
+            try:
+                if file_type == 'json':
                     new_config = json.load(uploaded_file)
-                    
-                    # Update config.yaml using ruamel to preserve comments
+                else:
+                    yaml_loader = YAML()
+                    new_config = yaml_loader.load(uploaded_file)
+                
+                if st.button(t("✅ Confirm Import"), use_container_width=True, type="primary"):
                     yaml = YAML()
                     yaml.preserve_quotes = True
                     with open('config.yaml', 'r', encoding='utf-8') as f:
@@ -81,8 +83,8 @@ def page_setting():
                     
                     def recursive_update(d, u):
                         for k, v in u.items():
-                            if isinstance(v, dict):
-                                d[k] = recursive_update(d.get(k, {}), v)
+                            if isinstance(v, dict) and k in d and isinstance(d[k], dict):
+                                recursive_update(d[k], v)
                             else:
                                 d[k] = v
                         return d
@@ -93,10 +95,10 @@ def page_setting():
                         yaml.dump(updated_config, f)
                         
                     st.success(t("Config imported successfully!"))
-                    time.sleep(1) # Give user time to see success message
+                    time.sleep(1)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Import failed: {e}")
+            except Exception as e:
+                st.error(f"Failed to parse file: {e}")
 
     display_language = st.selectbox("Display Language 🌐", 
                                   options=list(DISPLAY_LANGUAGES.keys()),
@@ -150,6 +152,8 @@ def page_setting():
             update_key("whisper.runtime", runtime)
             st.rerun()
         if runtime == "cloud":
+            config_input(t("WhisperX Cloud URL"), "whisper.whisperX_cloud_url")
+            config_input(t("WhisperX Token"), "whisper.whisperX_token")
             config_input(t("WhisperX 302ai API"), "whisper.whisperX_302_api_key")
         if runtime == "elevenlabs":
             config_input(("ElevenLabs API"), "whisper.elevenlabs_api_key")

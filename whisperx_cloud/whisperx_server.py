@@ -57,7 +57,7 @@ security = HTTPBearer()
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Verify the bearer token against environment variable"""
-    token = os.getenv("WHISPER_SERVER_TOKEN")
+    token = os.getenv("WHISPER_SERVER_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
     if not token:
         # If no token is set in environment, allow all requests (or warn?)
         # For security, let's say if variable is not set, we assume no auth needed? 
@@ -336,7 +336,7 @@ async def transcribe_base64(request: TranscriptionRequest):
     # In practice, you'd implement similar logic with base64 decoding
     raise HTTPException(status_code=501, detail="Base64 endpoint not implemented yet")
 
-@app.delete("/cache")
+@app.delete("/cache", dependencies=[Depends(verify_token)])
 async def clear_cache():
     """Clear model cache to free GPU memory"""
     global model_cache

@@ -34,6 +34,8 @@ whisper:
   # WhisperX 云端服务 URL (仅在 runtime: cloud 时使用)
   # 如果使用 docker-compose 启动的本地服务, 请设置为: http://whisperx-cloud:8000
   whisperX_cloud_url: 'http://whisperx-cloud:8000'
+  # WhisperX API token (用于远程 GPU 服务器验证)
+  whisperX_token: ''
 
 # ==================== 人声分离配置 ====================
 # Demucs 人声分离 (分离人声和背景音乐)

@@ -1,5 +1,5 @@
 # VideoLingo 配置文件 (Apple Silicon / ARM64 优化版本)
-# 此配置专为 Apple Silicon Mac 的 Docker 部署优化
+# 此配置已根据 main 分支进行了全面修复，补充了缺失的字段
 
 # ==================== 基础配置 ====================
 
@@ -7,80 +7,125 @@
 display_language: "zh-CN"
 
 # 目标翻译语言
-target_language: '简体中文'
+target_language: 'english'
 
 # ==================== API 配置 ====================
 # ⚠️ 重要: 请替换为你的实际 API 密钥
 api:
-  key: 'your-api-key-here'
-  base_url: 'https://api.openai.com/v1'
-  model: 'gpt-4'
+  key: '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'
+  base_url: 'https://integrate.api.nvidia.com/'
+  model: 'deepseek-ai/deepseek-v3.2'
+  llm_support_json: true
+  max_workers: 4
 
 # ==================== WhisperX 配置 ====================
 whisper:
   # 模型选项: tiny, base, small, medium, large-v1, large-v2, large-v3
-  # Apple Silicon 建议使用 medium 或 large-v3 (large-v3 更慢但更准)
   model: 'large-v3'
-  
+
   # 语言: zh (中文), en (英文), ja (日文), auto (自动检测)
   language: 'zh'
-  
-  # 运行模式:
-  # - local: 本地运行 (CPU模式, 较慢)
-  # - cloud: 使用 WhisperX 云端服务 (推荐, 如果启用了 whisperx-cloud 服务)
-  # - elevenlabs: 使用 ElevenLabs API
-  runtime: 'local'
-  
-  # WhisperX 云端服务 URL (仅在 runtime: cloud 时使用)
-  # 如果使用 docker-compose 启动的本地服务, 请设置为: http://whisperx-cloud:8000
+  detected_language: 'en'
+
+  # 运行模式: ["local", "cloud", "elevenlabs"]
+  runtime: 'cloud'
+
+  # WhisperX 云端服务 URL
   whisperX_cloud_url: 'http://whisperx-cloud:8000'
+  # WhisperX API token (用于远程 GPU 服务器验证)
+  whisperX_token: ''
+  # 302.ai API key
+  whisperX_302_api_key: 'your_302_api_key'
+  # ElevenLabs API key
+  elevenlabs_api_key: 'your_elevenlabs_api_key'
 
 # ==================== 人声分离配置 ====================
-# Demucs 人声分离 (分离人声和背景音乐)
-# 
-# 运行模式:
-# - local: 本地运行 (需要安装 demucs 包, Apple Silicon CPU 模式较慢)
-# - cloud: 使用云端服务 (推荐, 更快且节省本地资源)
-# - false: 关闭人声分离
-#
-# 云端模式配置:
-# 1. 部署 whisperx_cloud/Unified_Cloud_Server.ipynb 到 GPU 服务器 (Colab/Kaggle)
-# 2. 将服务 URL 配置到 whisperX_cloud_url (统一服务, 无需单独配置 demucs)
-# 3. 设置 demucs: 'cloud'
-#
-demucs: 'cloud'
+demucs: true
 
 # ==================== 字幕配置 ====================
-# 是否烧录字幕到视频
 burn_subtitles: true
-
-# FFmpeg GPU 加速
-# ⚠️ 在 Apple Silicon Docker 中必须设为 false
 ffmpeg_gpu: false
 
+# *Subtitle detail settings
+subtitle:
+  max_length: 75
+  target_multiplier: 1.2
+
+# ==================== Video/Youtube settings ====================
+youtube:
+  cookies_path: ''
+ytb_resolution: '1080'
+
+# ==================== Processing settings ====================
+summary_length: 8000
+max_split_length: 20
+reflect_translate: true
+pause_before_translate: false
+
 # ==================== TTS 配置 ====================
-# TTS 方法选项:
-# - azure_tts: 微软 Azure TTS (推荐, 需要API密钥)
-# - openai_tts: OpenAI TTS (需要API密钥)
-# - edge_tts: 微软 Edge TTS (免费, 推荐)
-# - fish_tts: Fish TTS
-# - gpt_sovits_tts: GPT-SoVITS (需要本地部署)
-# - custom_tts: 自定义TTS
 tts_method: 'edge_tts'
 
+# SiliconFlow FishTTS
+sf_fish_tts:
+  api_key: 'YOUR_API_KEY'
+  voice: 'anna'
+  custom_name: ''
+  voice_id: ''
+  mode: "preset"
+
+# OpenAI TTS
+openai_tts:
+  api_key: 'YOUR_302_API_KEY'
+  voice: 'alloy'
+
+# Azure TTS
+azure_tts:
+  api_key: 'YOUR_302_API_KEY'
+  voice: 'zh-CN-YunfengNeural'
+
+# Fish TTS
+fish_tts:
+  api_key: 'YOUR_302_API_KEY'
+  character: 'AD学姐'
+  character_id_dict:
+    'AD学姐': '7f92f8afb8ec43bf81429cc1c9199cb1'
+    '丁真': '54a5170264694bfc8e9ad98df7bd89c3'
+
+# CosyVoice
+sf_cosyvoice2:
+  api_key: 'YOUR_SF_KEY'
+
+# Edge TTS configuration
+edge_tts:
+  voice: 'en-US-JennyNeural'
+
+# GPT-SoVITS
+gpt_sovits:
+  character: 'Huanyuv2'
+  refer_mode: 3
+
+# F5 TTS
+f5tts:
+  302_api: 'YOUR_302_API_KEY'
+
 # ==================== 模型目录配置 ====================
-# 模型缓存目录 (Docker 容器中路径)
 model_dir: '/app/models'
 
 # ==================== 性能优化配置 ====================
-# 批处理大小 (Docker CPU 模式建议保持较小)
 batch_size: 1
-
-# 计算类型 (Docker CPU 模式必须使用 int8)
 compute_type: 'int8'
 
+# ==================== 音频速度与合并配置 ====================
+speed_factor:
+  min: 1
+  accept: 1.2 # Maximum acceptable speed
+  max: 1.4
+
+min_subtitle_duration: 2.5
+min_trim_duration: 3.5
+tolerance: 1.5
+
 # ==================== 其他配置 ====================
-# 字幕样式 (可选)
 subtitle_style:
   font: 'Noto Sans CJK SC'
   font_size: 24
@@ -89,18 +134,38 @@ subtitle_style:
   outline_width: 2
   alignment: 'center'
 
-# 视频输出分辨率 (可选, 默认保持原分辨率)
-output_resolution: null
-
-# 音频质量 (可选)
+output_resolution:
 audio_quality: 'high'
 
-# ==================== 高级配置 (一般不需要修改) ====================
-# 临时文件目录
+allowed_video_formats: ['mp4', 'mov', 'avi', 'mkv', 'flv', 'wmv', 'webm']
+allowed_audio_formats: ['wav', 'mp3', 'flac', 'm4a']
+
+# ==================== 高级配置 ====================
 temp_dir: '/app/temp'
-
-# 日志级别: DEBUG, INFO, WARNING, ERROR
 log_level: 'INFO'
-
-# 是否启用调试模式
 debug: false
+
+# Spacy models
+spacy_model_map:
+  en: 'en_core_web_md'
+  ru: 'ru_core_news_md'
+  fr: 'fr_core_news_md'
+  ja: 'ja_core_news_md'
+  es: 'es_core_news_md'
+  de: 'de_core_news_md'
+  it: 'it_core_news_md'
+  zh: 'zh_core_web_md'
+
+# Languages that use space as separator
+language_split_with_space:
+- 'en'
+- 'es'
+- 'fr'
+- 'de'
+- 'it'
+- 'ru'
+
+# Languages that do not use space as separator
+language_split_without_space:
+- 'zh'
+- 'ja'
