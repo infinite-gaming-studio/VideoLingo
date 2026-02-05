@@ -10,7 +10,7 @@ Endpoints:
 Deploy on GPU cloud platforms (Colab, Kaggle, etc.)
 """
 
-SERVER_VERSION = "2.1.0"
+SERVER_VERSION = "2.2.0"
 
 import os
 import sys
@@ -76,7 +76,8 @@ compute_type = None
 def get_device():
     """Smart device detection: CUDA -> MPS -> CPU"""
     if torch.cuda.is_available():
-        return "cuda", "float16" if torch.cuda.is_bf16_supported() else "int8"
+        # Prefer float16 for CUDA GPUs, only use int8 if necessary
+        return "cuda", "float16"
     elif torch.backends.mps.is_available():
         return "mps", "float16"
     else:
@@ -133,16 +134,16 @@ def get_or_load_whisper_model(model_name: str, language: Optional[str] = None, b
     cache_key = f"{model_name}_{language}_{compute_type}"
     
     if cache_key not in whisper_model_cache:
-        print(f"📥 Loading Whisper model: {model_name}...")
+        print(f"📥 Loading Whisper model: {model_name} (compute_type: {compute_type})...")
         vad_options = {"vad_onset": 0.500, "vad_offset": 0.363}
         asr_options = {"temperatures": [0], "initial_prompt": ""}
-        
+
         model = whisperx.load_model(
             model_name, device, compute_type=compute_type,
             language=language, vad_options=vad_options, asr_options=asr_options
         )
         whisper_model_cache[cache_key] = model
-        print(f"✅ Whisper model loaded: {model_name}")
+        print(f"✅ Whisper model loaded: {model_name} ({compute_type})")
     
     return whisper_model_cache[cache_key]
 
@@ -152,12 +153,12 @@ def get_or_load_demucs_model():
         return None
 
     if 'htdemucs' not in demucs_model_cache:
-        print("📥 Loading Demucs model...")
+        print(f"📥 Loading Demucs model on {device}...")
         model = get_model('htdemucs')
         model.eval()
         model.to(device)
         demucs_model_cache['htdemucs'] = model
-        print("✅ Demucs model loaded")
+        print(f"✅ Demucs model loaded (device: {device})")
 
     return demucs_model_cache['htdemucs']
 
