@@ -1,0 +1,82 @@
+# VideoLingo Cloud Native - ARM64 (Apple Silicon) Optimized
+# 轻量级Docker镜像，仅包含CPU计算依赖
+# 所有GPU计算通过远程云服务完成
+# Lightweight Docker image for CPU-only processing
+# All GPU computation done via remote cloud services
+
+FROM python:3.10-slim-bookworm
+
+# 设置环境变量 / Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# 安装基础依赖和FFmpeg / Install basic dependencies and FFmpeg
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    wget \
+    xz-utils \
+    git \
+    build-essential \
+    libffi-dev \
+    libssl-dev \
+    fonts-noto-cjk \
+    pkg-config \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libgl1-mesa-glx \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 验证FFmpeg安装 / Verify FFmpeg installation
+RUN ffmpeg -version | head -1
+
+# 设置工作目录 / Set working directory
+WORKDIR /app
+
+# 复制依赖文件（使用云原生依赖）/ Copy dependency files (cloud-native)
+COPY requirements_cloud.txt /app/requirements_cloud.txt
+COPY requirements.txt /app/requirements.txt
+
+# 升级pip / Upgrade pip
+RUN pip install --upgrade pip setuptools wheel
+
+# 安装云原生依赖（轻量级，无PyTorch）/ Install cloud-native dependencies (lightweight, no PyTorch)
+RUN pip install -r requirements_cloud.txt
+
+# 下载Spacy模型 / Download Spacy models
+RUN python3 -m spacy download en_core_web_sm || true
+RUN python3 -m spacy download zh_core_web_sm || true
+
+# 复制项目代码 / Copy project code
+COPY . /app/
+
+# 创建必要的目录 / Create necessary directories
+RUN mkdir -p /app/output /app/input /app/_model_cache /app/temp
+
+# 暴露Streamlit端口 / Expose Streamlit port
+EXPOSE 8501
+
+# 设置环境变量 / Set environment variables
+ENV STREAMLIT_SERVER_PORT=8501
+ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
+ENV STREAMLIT_SERVER_HEADLESS=true
+ENV STREAMLIT_SERVER_ENABLE_CORS=false
+ENV STREAMLIT_SERVER_MAX_UPLOAD_SIZE=2000
+
+# 云原生模式配置 / Cloud-native mode configuration
+ENV CLOUD_NATIVE_MODE=true
+ENV PYTHONUNBUFFERED=1
+
+# 时区设置 / Timezone
+ENV TZ=Asia/Shanghai
+
+# 健康检查 / Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+
+# 启动命令 / Start command
+CMD ["streamlit", "run", "st.py", "--server.port=8501", "--server.address=0.0.0.0"]

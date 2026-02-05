@@ -144,6 +144,28 @@ docker-compose up -d videolingo
 
 > **Note:** Apple Silicon version uses CPU mode in Docker (MPS not available in containers). For better performance, consider native installation with `python install.py` which supports MPS acceleration.
 
+#### Cloud Native Mode (Recommended for Apple Silicon)
+Run VideoLingo without local GPU! All AI processing (ASR, vocal separation) is offloaded to remote cloud services. See [Docker Cloud Native Guide](/DOCKER_CLOUD_NATIVE_GUIDE.md):
+
+```bash
+# Clone repository
+git clone https://github.com/infinite-gaming-studio/VideoLingo.git
+cd VideoLingo
+
+# Configure cloud service URL in config.yaml
+# Then start with one command
+./start-cloud-native.sh
+```
+
+Or manually:
+
+```bash
+docker-compose -f docker-compose.cloud-native.yml build
+docker-compose -f docker-compose.cloud-native.yml up -d
+```
+
+> **Benefits:** No GPU required, lightweight (~2GB image vs ~8GB), fast startup (5 min vs 30 min), runs on any Mac including MacBook Air.
+
 ## APIs
 VideoLingo supports OpenAI-Like API format and various TTS interfaces:
 - LLM: `claude-3-5-sonnet`, `gpt-4.1`, `deepseek-v3`, `gemini-2.0-flash`, ... (sorted by performance, be cautious with gemini-2.5-flash...)
