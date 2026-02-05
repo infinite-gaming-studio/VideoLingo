@@ -1,0 +1,46 @@
+# VideoLingo Cloud Native - Base Image
+# 包含所有依赖的基础镜像，不经常变更
+# Usage: docker build -f Dockerfile.base -t videolingo:base .
+
+FROM mambaorg/micromamba:1.5.10-bookworm-slim
+
+# 用户设置 / User setup
+USER root
+
+# 设置环境变量 / Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Shanghai
+
+# 安装基础工具 / Install basic tools
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    wget \
+    git \
+    fonts-noto-cjk \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 设置工作目录 / Set working directory
+WORKDIR /app
+
+# 复制依赖文件 / Copy dependency files
+COPY environment_cloud.yml requirements_cloud.txt ./
+
+# 创建 Conda 环境 / Create Conda environment
+RUN --mount=type=cache,target=/opt/conda/pkgs \
+    micromamba install -y -n base -f environment_cloud.yml && \
+    micromamba clean --all --yes
+
+# 安装 pip 依赖 / Install pip dependencies
+RUN micromamba run -n base pip install --no-cache-dir -r requirements_cloud.txt
+
+# 下载 Spacy 模型 / Download Spacy models
+RUN micromamba run -n base python -m spacy download en_core_web_sm || true && \
+    micromamba run -n base python -m spacy download zh_core_web_sm || true
+
+# 创建必要的目录 / Create necessary directories
+RUN mkdir -p /app/output /app/input /app/_model_cache /app/temp /app/logs

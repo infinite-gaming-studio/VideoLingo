@@ -1,0 +1,172 @@
+# VideoLingo 配置文件 (Apple Silicon / ARM64 优化版本)
+# 此配置已根据 main 分支进行了全面修复，补充了缺失的字段
+
+# ==================== 基础配置 ====================
+
+# 界面语言
+display_language: "zh-CN"
+
+# 目标翻译语言
+target_language: 'english'
+
+# ==================== API 配置 ====================
+# ⚠️ 重要: 请替换为你的实际 API 密钥
+api:
+  key: 'YOUR_API_KEY_HERE'
+  base_url: 'https://api.openai.com/v1'
+  model: 'gpt-4'
+  llm_support_json: true
+  max_workers: 4
+
+# ==================== WhisperX 配置 ====================
+whisper:
+  # 模型选项: tiny, base, small, medium, large-v1, large-v2, large-v3
+  model: 'large-v3'
+
+  # 语言: zh (中文), en (英文), ja (日文), auto (自动检测)
+  language: 'zh'
+  detected_language: 'en'
+
+  # 运行模式: ["local", "elevenlabs"]
+  # - local: 使用本地 WhisperX 模型 (需要 GPU)
+  # - elevenlabs: 使用 ElevenLabs API
+  # - cloud_native: 启用 cloud_native.enabled 使用自建云端服务
+  runtime: 'local'
+
+  # WhisperX 云端服务 URL
+  whisperX_cloud_url: ''
+  # WhisperX API token (用于远程 GPU 服务器验证)
+  whisperX_token: ''
+  # ElevenLabs API key
+  elevenlabs_api_key: ''
+
+# ==================== 人声分离配置 ====================
+demucs: true
+
+# ==================== 字幕配置 ====================
+burn_subtitles: true
+ffmpeg_gpu: false
+
+# *Subtitle detail settings
+subtitle:
+  max_length: 75
+  target_multiplier: 1.2
+
+# ==================== Video/Youtube settings ====================
+youtube:
+  cookies_path: ''
+ytb_resolution: '1080'
+
+# ==================== Processing settings ====================
+summary_length: 8000
+max_split_length: 20
+reflect_translate: true
+pause_before_translate: false
+
+# ==================== TTS 配置 ====================
+tts_method: 'edge_tts'
+
+# SiliconFlow FishTTS
+sf_fish_tts:
+  api_key: 'YOUR_API_KEY'
+  voice: 'anna'
+  custom_name: ''
+  voice_id: ''
+  mode: "preset"
+
+# OpenAI TTS
+openai_tts:
+  api_key: 'YOUR_API_KEY'
+  voice: 'alloy'
+
+# Azure TTS
+azure_tts:
+  api_key: 'YOUR_API_KEY'
+  voice: 'zh-CN-YunfengNeural'
+
+# Fish TTS
+fish_tts:
+  api_key: 'YOUR_API_KEY'
+  character: 'AD学姐'
+  character_id_dict:
+    'AD学姐': '7f92f8afb8ec43bf81429cc1c9199cb1'
+    '丁真': '54a5170264694bfc8e9ad98df7bd89c3'
+
+# CosyVoice
+sf_cosyvoice2:
+  api_key: 'YOUR_SF_KEY'
+
+# Edge TTS configuration
+edge_tts:
+  voice: 'en-US-JennyNeural'
+
+# GPT-SoVITS
+gpt_sovits:
+  character: 'Huanyuv2'
+  refer_mode: 3
+
+# F5 TTS
+f5tts:
+  api_key: 'YOUR_API_KEY'
+
+# ==================== 模型目录配置 ====================
+model_dir: '/app/models'
+
+# ==================== 性能优化配置 ====================
+batch_size: 1
+compute_type: 'int8'
+
+# ==================== 音频速度与合并配置 ====================
+speed_factor:
+  min: 1
+  accept: 1.2 # Maximum acceptable speed
+  max: 1.4
+
+min_subtitle_duration: 2.5
+min_trim_duration: 3.5
+tolerance: 1.5
+
+# ==================== 其他配置 ====================
+subtitle_style:
+  font: 'Noto Sans CJK SC'
+  font_size: 24
+  color: 'white'
+  outline_color: 'black'
+  outline_width: 2
+  alignment: 'center'
+
+output_resolution:
+audio_quality: 'high'
+
+allowed_video_formats: ['mp4', 'mov', 'avi', 'mkv', 'flv', 'wmv', 'webm']
+allowed_audio_formats: ['wav', 'mp3', 'flac', 'm4a']
+
+# ==================== 高级配置 ====================
+temp_dir: '/app/temp'
+log_level: 'INFO'
+debug: false
+
+# Spacy models
+spacy_model_map:
+  en: 'en_core_web_md'
+  ru: 'ru_core_news_md'
+  fr: 'fr_core_news_md'
+  ja: 'ja_core_news_md'
+  es: 'es_core_news_md'
+  de: 'de_core_news_md'
+  it: 'it_core_news_md'
+  zh: 'zh_core_web_md'
+
+# Languages that use space as separator
+language_split_with_space:
+- 'en'
+- 'es'
+- 'fr'
+- 'de'
+- 'it'
+- 'ru'
+
+# Languages that do not use space as separator
+language_split_without_space:
+- 'zh'
+- 'ja'

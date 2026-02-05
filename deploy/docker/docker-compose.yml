@@ -1,0 +1,68 @@
+# VideoLingo 多阶段构建配置
+# 
+# 使用步骤：
+# 1. 构建基础镜像（很少需要执行）:
+#    docker-compose -f deploy/docker/docker-compose.yml build base
+#
+# 2. 构建应用镜像（每次代码更新执行）:
+#    docker-compose -f deploy/docker/docker-compose.yml build app
+#
+# 3. 启动服务:
+#    docker-compose -f deploy/docker/docker-compose.yml up -d
+
+services:
+  # 基础镜像 - 包含所有依赖
+  base:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.base
+    image: videolingo:base
+    # 这个服务不会实际运行，只是用来构建基础镜像
+    command: echo "Base image built"
+
+  # 应用镜像 - 基于基础镜像，只包含代码
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.app
+    image: videolingo:latest
+    container_name: videolingo-app
+    restart: unless-stopped
+    
+    ports:
+      - "8501:8501"
+    
+    volumes:
+      - ./deploy_instance/input:/app/input
+      - ./deploy_instance/output:/app/output
+      - ./deploy_instance/_model_cache:/app/_model_cache
+      - ./deploy_instance/temp:/app/temp
+      - ./deploy_instance/config.yaml:/app/config.yaml
+      - ./deploy_instance/custom_terms.xlsx:/app/custom_terms.xlsx
+      - ./deploy_instance/logs:/app/logs
+
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+      - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=2000
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - HF_HOME=/app/_model_cache/huggingface
+      - TRANSFORMERS_CACHE=/app/_model_cache/transformers
+      - TZ=Asia/Shanghai
+      - CLOUD_NATIVE_MODE=true
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
