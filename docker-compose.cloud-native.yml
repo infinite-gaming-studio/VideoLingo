@@ -30,9 +30,11 @@ services:
       - ./deploy_instance/temp:/app/temp
       # 配置文件持久化 / Config file persistence
       - ./deploy_instance/config.yaml:/app/config.yaml
+      # 自定义术语表 / Custom terms
+      - ./deploy_instance/custom_terms.xlsx:/app/custom_terms.xlsx
       # 日志 / Logs
       - ./deploy_instance/logs:/app/logs
-    
+
     environment:
       # Streamlit配置 / Streamlit configuration
       - STREAMLIT_SERVER_PORT=8501
@@ -83,7 +85,3 @@ services:
         max-size: "100m"
         max-file: "3"
 
-# 注意：云原生模式下不需要本地WhisperX服务
-# 所有AI处理（ASR、人声分离）通过config.yaml中配置的远程服务完成
-# Note: In cloud-native mode, no local WhisperX service is needed
-# All AI processing (ASR, vocal separation) is done via remote services configured in config.yaml

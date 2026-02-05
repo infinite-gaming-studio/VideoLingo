@@ -166,7 +166,12 @@ def page_setting():
         if demucs != load_key("demucs"):
             update_key("demucs", demucs)
             st.rerun()
-        
+
+        burn_subtitles = st.toggle(t("Burn-in Subtitles"), value=load_key("burn_subtitles"), help=t("Whether to burn subtitles into the video, will increase processing time"))
+        if burn_subtitles != load_key("burn_subtitles"):
+            update_key("burn_subtitles", burn_subtitles)
+            st.rerun()
+
         # Show cloud settings if cloud runtime OR demucs is enabled
         if runtime == "cloud" or demucs:
             with st.container(border=True):
@@ -174,14 +179,9 @@ def page_setting():
                 # Use a unified key if possible, but allow separate if needed
                 config_input(t("Cloud Service URL"), "whisper.whisperX_cloud_url", help=t("URL for both WhisperX and Demucs cloud services"))
                 config_input(t("Authentication Token"), "whisper.whisperX_token", help=t("Token for cloud services authentication"))
-                
+
                 if runtime == "cloud":
                     config_input(t("WhisperX 302ai API"), "whisper.whisperX_302_api_key")
-
-        burn_subtitles = st.toggle(t("Burn-in Subtitles"), value=load_key("burn_subtitles"), help=t("Whether to burn subtitles into the video, will increase processing time"))
-        if burn_subtitles != load_key("burn_subtitles"):
-            update_key("burn_subtitles", burn_subtitles)
-            st.rerun()
     with st.expander(t("Dubbing Settings"), expanded=True):
         tts_methods = ["azure_tts", "openai_tts", "fish_tts", "sf_fish_tts", "edge_tts", "gpt_sovits", "custom_tts", "sf_cosyvoice2", "f5tts"]
         select_tts = st.selectbox(t("TTS Method"), options=tts_methods, index=tts_methods.index(load_key("tts_method")))
