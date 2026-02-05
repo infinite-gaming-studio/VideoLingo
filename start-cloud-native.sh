@@ -61,25 +61,32 @@ check_docker_compose() {
 
 # 检查云原生配置 / Check cloud-native configuration
 check_cloud_config() {
-    if [ ! -f "config.yaml" ]; then
-        print_error "config.yaml 配置文件不存在 / config.yaml not found"
-        exit 1
+    if [ ! -f "deploy_instance/config.yaml" ]; then
+        if [ -f "config.yaml" ]; then
+            print_info "正在初始化 deploy_instance/config.yaml... / Initializing deploy_instance/config.yaml..."
+            cp config.yaml deploy_instance/config.yaml
+        else
+            print_error "未找到 config.yaml，无法初始化 deploy_instance/config.yaml / config.yaml not found, cannot initialize deploy_instance/config.yaml"
+            exit 1
+        fi
     fi
     
+    CONFIG_FILE="deploy_instance/config.yaml"
+    
     # 检查是否启用了云原生模式 / Check if cloud-native mode is enabled
-    if grep -q "enabled: true" config.yaml && grep -q "cloud_native:" config.yaml; then
+    if grep -q "enabled: true" $CONFIG_FILE && grep -q "cloud_native:" $CONFIG_FILE; then
         print_success "云原生模式已启用 / Cloud-native mode is enabled"
         
         # 检查云URL配置 / Check cloud URL configuration
-        if grep -q "cloud_url:" config.yaml; then
-            CLOUD_URL=$(grep "cloud_url:" config.yaml | head -1 | sed 's/.*cloud_url: *//' | tr -d '"' | tr -d "'" | tr -d ' ')
+        if grep -q "cloud_url:" $CONFIG_FILE; then
+            CLOUD_URL=$(grep "cloud_url:" $CONFIG_FILE | head -1 | sed 's/.*cloud_url: *//' | tr -d '"' | tr -d "'" | tr -d ' ')
             if [ -n "$CLOUD_URL" ] && [ "$CLOUD_URL" != "''" ] && [ "$CLOUD_URL" != '""' ]; then
                 print_success "云服务URL配置: $CLOUD_URL"
                 print_info "请确保云服务正在运行 / Please ensure cloud service is running"
             else
                 print_warning "云服务URL未配置 / Cloud service URL not configured"
-                print_info "请编辑 config.yaml 设置 cloud_native.cloud_url"
-                print_info "Please edit config.yaml to set cloud_native.cloud_url"
+                print_info "请编辑 deploy_instance/config.yaml 设置 cloud_native.cloud_url"
+                print_info "Please edit deploy_instance/config.yaml to set cloud_native.cloud_url"
             fi
         fi
     else
@@ -91,8 +98,12 @@ check_cloud_config() {
 
 # 创建必要的目录 / Create necessary directories
 create_directories() {
-    print_info "创建必要的目录... / Creating necessary directories..."
-    mkdir -p input output _model_cache temp logs
+    print_info "创建部署目录 deploy_instance... / Creating deployment directory deploy_instance..."
+    mkdir -p deploy_instance/input \
+             deploy_instance/output \
+             deploy_instance/_model_cache \
+             deploy_instance/temp \
+             deploy_instance/logs
     print_success "目录创建完成 / Directories created"
 }
 
@@ -158,10 +169,11 @@ show_access_info() {
     echo -e "🌐 访问地址 / Access URL: ${GREEN}http://localhost:8501${NC}"
     echo ""
     echo "📁 目录映射 / Directory mapping:"
-    echo "   - 输入视频 / Input videos:  ./input"
-    echo "   - 输出结果 / Output results: ./output"
-    echo "   - 模型缓存 / Model cache:   ./_model_cache"
-    echo "   - 临时文件 / Temp files:    ./temp"
+    echo "   - 配置文件 / Config file:   ./deploy_instance/config.yaml"
+    echo "   - 输入视频 / Input videos:  ./deploy_instance/input"
+    echo "   - 输出结果 / Output results: ./deploy_instance/output"
+    echo "   - 模型缓存 / Model cache:   ./deploy_instance/_model_cache"
+    echo "   - 临时文件 / Temp files:    ./deploy_instance/temp"
     echo ""
     echo "📋 常用命令 / Common commands:"
     echo "   查看日志 / View logs:"

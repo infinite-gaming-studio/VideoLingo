@@ -22,6 +22,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
+    git \
     fonts-noto-cjk \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -29,24 +30,20 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # 设置工作目录 / Set working directory
 WORKDIR /app
 
-# 复制依赖文件 / Copy dependency files
-# 我们将动态根据 requirements_cloud.txt 生成环境文件，或直接使用预定义的 yml
-# Here we copy the pre-defined environment file
-COPY environment_cloud.yml /tmp/env.yaml
+# 获取代码 / Fetch code
+ARG REPO_URL=https://github.com/infinite-gaming-studio/VideoLingo.git
+ARG BRANCH=feature/arm64-docker
+RUN git clone -b ${BRANCH} --single-branch --depth 1 ${REPO_URL} .
 
 # 创建 Conda 环境 / Create Conda environment
 # 使用 mamba 安装所有依赖 (系统库 + Python库)
 # Use mamba to install all dependencies (System libs + Python libs)
 RUN --mount=type=cache,target=/opt/conda/pkgs \
-    micromamba install -y -n base -f /tmp/env.yaml && \
+    micromamba install -y -n base -f environment_cloud.yml && \
     micromamba clean --all --yes
-
-# 复制本地代码 / Copy local code
-COPY . .
 
 # 安装剩余的 pip 依赖 / Install remaining pip dependencies
 # 这里安装 conda-forge 上没有的包
-COPY requirements_cloud.txt /app/requirements_cloud.txt
 RUN micromamba run -n base pip install --no-cache-dir -r requirements_cloud.txt
 
 # 下载Spacy模型 / Download Spacy models
