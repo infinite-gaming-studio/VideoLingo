@@ -8,7 +8,7 @@ Cloud Native Mode:
 - Local processing includes: FFmpeg, pydub, spacy (lightweight)
 
 Legacy Mode:
-- Supports local GPU, 302 API, or ElevenLabs API for ASR
+- Supports local GPU or ElevenLabs API for ASR
 - Supports local or cloud for Demucs
 """
 
@@ -90,12 +90,11 @@ def transcribe():
     elif runtime == "local":
         from core.asr_backend.whisperX_asr import transcribe_audio as ts
         rprint("[cyan]🎤 Transcribing audio with local model...[/cyan]")
-    elif runtime == "cloud":
-        from core.asr_backend.whisperX_302 import transcribe_audio_302 as ts
-        rprint("[cyan]🎤 Transcribing audio with 302 API...[/cyan]")
     elif runtime == "elevenlabs":
         from core.asr_backend.elevenlabs_asr import transcribe_audio_elevenlabs as ts
         rprint("[cyan]🎤 Transcribing audio with ElevenLabs API...[/cyan]")
+    else:
+        raise ValueError(f"Unsupported whisper.runtime: {runtime}. Use 'local', 'elevenlabs', or enable cloud_native mode.")
 
     for start, end in segments:
         result = ts(_RAW_AUDIO_FILE, vocal_audio, start, end)

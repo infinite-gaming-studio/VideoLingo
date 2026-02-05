@@ -12,9 +12,9 @@ target_language: 'english'
 # ==================== API 配置 ====================
 # ⚠️ 重要: 请替换为你的实际 API 密钥
 api:
-  key: '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'
-  base_url: 'https://integrate.api.nvidia.com/'
-  model: 'deepseek-ai/deepseek-v3.2'
+  key: 'YOUR_API_KEY_HERE'
+  base_url: 'https://api.openai.com/v1'
+  model: 'gpt-4'
   llm_support_json: true
   max_workers: 4
 
@@ -27,17 +27,18 @@ whisper:
   language: 'zh'
   detected_language: 'en'
 
-  # 运行模式: ["local", "cloud", "elevenlabs"]
-  runtime: 'cloud'
+  # 运行模式: ["local", "elevenlabs"]
+  # - local: 使用本地 WhisperX 模型 (需要 GPU)
+  # - elevenlabs: 使用 ElevenLabs API
+  # - cloud_native: 启用 cloud_native.enabled 使用自建云端服务
+  runtime: 'local'
 
   # WhisperX 云端服务 URL
-  whisperX_cloud_url: 'http://whisperx-cloud:8000'
+  whisperX_cloud_url: ''
   # WhisperX API token (用于远程 GPU 服务器验证)
   whisperX_token: ''
-  # 302.ai API key
-  whisperX_302_api_key: 'your_302_api_key'
   # ElevenLabs API key
-  elevenlabs_api_key: 'your_elevenlabs_api_key'
+  elevenlabs_api_key: ''
 
 # ==================== 人声分离配置 ====================
 demucs: true
@@ -75,17 +76,17 @@ sf_fish_tts:
 
 # OpenAI TTS
 openai_tts:
-  api_key: 'YOUR_302_API_KEY'
+  api_key: 'YOUR_API_KEY'
   voice: 'alloy'
 
 # Azure TTS
 azure_tts:
-  api_key: 'YOUR_302_API_KEY'
+  api_key: 'YOUR_API_KEY'
   voice: 'zh-CN-YunfengNeural'
 
 # Fish TTS
 fish_tts:
-  api_key: 'YOUR_302_API_KEY'
+  api_key: 'YOUR_API_KEY'
   character: 'AD学姐'
   character_id_dict:
     'AD学姐': '7f92f8afb8ec43bf81429cc1c9199cb1'
@@ -106,7 +107,7 @@ gpt_sovits:
 
 # F5 TTS
 f5tts:
-  302_api: 'YOUR_302_API_KEY'
+  api_key: 'YOUR_API_KEY'
 
 # ==================== 模型目录配置 ====================
 model_dir: '/app/models'
