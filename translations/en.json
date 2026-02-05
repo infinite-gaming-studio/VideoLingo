@@ -108,5 +108,10 @@
     "LLM JSON Format Support": "LLM JSON Format Support",
     "Enable if your LLM supports JSON mode output": "Enable if your LLM supports JSON mode output",
     "WhisperX Token": "WhisperX Token",
-    "WhisperX Cloud URL": "WhisperX Cloud URL"
+    "WhisperX Cloud URL": "WhisperX Cloud URL",
+    "Cloud Service Settings": "Cloud Service Settings",
+    "Cloud Service URL": "Cloud Service URL",
+    "URL for both WhisperX and Demucs cloud services": "URL for both WhisperX and Demucs cloud services",
+    "Authentication Token": "Authentication Token",
+    "Token for cloud services authentication": "Token for cloud services authentication"
 }

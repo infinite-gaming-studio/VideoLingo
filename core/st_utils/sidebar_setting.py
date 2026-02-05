@@ -25,6 +25,7 @@ def page_setting():
                 "display_language",
                 "api.key", "api.base_url", "api.model", "api.llm_support_json",
                 "whisper.language", "whisper.runtime", "whisper.whisperX_cloud_url", "whisper.whisperX_token", "whisper.whisperX_302_api_key", "whisper.elevenlabs_api_key",
+                "demucs_cloud_url", "demucs_token",
                 "target_language", "demucs", "burn_subtitles", "tts_method",
                 "sf_fish_tts.api_key", "sf_fish_tts.mode", "sf_fish_tts.voice",
                 "openai_tts.api_key", "openai_tts.voice",
@@ -151,10 +152,7 @@ def page_setting():
         if runtime != load_key("whisper.runtime"):
             update_key("whisper.runtime", runtime)
             st.rerun()
-        if runtime == "cloud":
-            config_input(t("WhisperX Cloud URL"), "whisper.whisperX_cloud_url")
-            config_input(t("WhisperX Token"), "whisper.whisperX_token")
-            config_input(t("WhisperX 302ai API"), "whisper.whisperX_302_api_key")
+        
         if runtime == "elevenlabs":
             config_input(("ElevenLabs API"), "whisper.elevenlabs_api_key")
 
@@ -169,6 +167,17 @@ def page_setting():
             update_key("demucs", demucs)
             st.rerun()
         
+        # Show cloud settings if cloud runtime OR demucs is enabled
+        if runtime == "cloud" or demucs:
+            with st.container(border=True):
+                st.write(f"🌐 {t('Cloud Service Settings')}")
+                # Use a unified key if possible, but allow separate if needed
+                config_input(t("Cloud Service URL"), "whisper.whisperX_cloud_url", help=t("URL for both WhisperX and Demucs cloud services"))
+                config_input(t("Authentication Token"), "whisper.whisperX_token", help=t("Token for cloud services authentication"))
+                
+                if runtime == "cloud":
+                    config_input(t("WhisperX 302ai API"), "whisper.whisperX_302_api_key")
+
         burn_subtitles = st.toggle(t("Burn-in Subtitles"), value=load_key("burn_subtitles"), help=t("Whether to burn subtitles into the video, will increase processing time"))
         if burn_subtitles != load_key("burn_subtitles"):
             update_key("burn_subtitles", burn_subtitles)

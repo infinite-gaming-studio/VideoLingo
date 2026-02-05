@@ -41,6 +41,8 @@ def get_cloud_url() -> str:
     
     try:
         url = load_key("demucs_cloud_url", "")
+        if not url:
+            url = load_key("whisper.whisperX_cloud_url", "")
         if url:
             return url.rstrip('/')
     except:
@@ -126,7 +128,10 @@ def separate_audio_cloud(
         token = os.getenv("WHISPERX_CLOUD_TOKEN")
         if not token:
             try:
-                token = load_key("whisper.whisperX_token", "")
+                # Priority: demucs_token (if exists) > whisperX_token
+                token = load_key("demucs_token", "")
+                if not token:
+                    token = load_key("whisper.whisperX_token", "")
             except:
                 pass
     if token:
