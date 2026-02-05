@@ -11,7 +11,7 @@ yaml.preserve_quotes = True
 # load & update config
 # -----------------------
 
-def load_key(key):
+def load_key(key, default=None):
     with lock:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as file:
             data = yaml.load(file)
@@ -22,6 +22,8 @@ def load_key(key):
         if isinstance(value, dict) and k in value:
             value = value[k]
         else:
+            if default is not None:
+                return default
             raise KeyError(f"Key '{k}' not found in configuration")
     return value
 
