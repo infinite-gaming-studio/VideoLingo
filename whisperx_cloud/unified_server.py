@@ -337,8 +337,23 @@ async def separate_audio(
             print("🎵 Separating audio...")
             # Load audio file
             from torchaudio import load as torchaudio_load
+            from torchaudio import transforms as T
             wav, sr = torchaudio_load(input_path)
             wav = wav.to(device)
+
+            # Ensure stereo (2 channels) for demucs
+            if wav.shape[0] == 1:
+                print("⚠️ Input is mono, converting to stereo...")
+                wav = wav.repeat(2, 1)  # Repeat mono to stereo
+            elif wav.shape[0] > 2:
+                print("⚠️ Input has more than 2 channels, using first 2...")
+                wav = wav[:2, :]
+
+            # Resample to model's expected sample rate if needed
+            if sr != model.samplerate:
+                print(f"⚠️ Resampling from {sr}Hz to {model.samplerate}Hz...")
+                resampler = T.Resample(sr, model.samplerate).to(device)
+                wav = resampler(wav)
 
             # Apply separation
             with torch.no_grad():
