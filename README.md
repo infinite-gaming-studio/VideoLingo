@@ -79,6 +79,8 @@ https://github.com/user-attachments/assets/47d965b2-b4ab-4a0b-9d08-b49a7bf3508c
 
 Meet any problem? Chat with our free online AI agent [**here**](https://share.fastgpt.in/chat/share?shareId=066w11n3r9aq6879r4z0v9rh) to help you.
 
+> 🚀 **NEW: Cloud Native Mode** - Run VideoLingo without GPU! See [Cloud Native Guide](/CLOUD_NATIVE_README.md)
+
 > **Note:** For Windows users with NVIDIA GPU, follow these steps before installation:
 > 1. Install [CUDA Toolkit 12.6](https://developer.download.nvidia.com/compute/cuda/12.6.0/local_installers/cuda_12.6.0_560.76_windows.exe)
 > 2. Install [CUDNN 9.3.0](https://developer.download.nvidia.com/compute/cudnn/9.3.0/local_installers/cudnn_9.3.0_windows.exe)

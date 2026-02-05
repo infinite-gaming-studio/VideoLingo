@@ -1,3 +1,18 @@
+"""
+VideoLingo Demucs Audio Separation Module
+Supports both local GPU processing and cloud-native remote processing
+
+Cloud Native Mode:
+- When cloud_native.enabled=true in config.yaml
+- All separation processing is done via remote Demucs cloud service
+- No local torch/demucs dependencies required
+
+Local Mode (Legacy):
+- When cloud_native.enabled=false or not set
+- Uses local GPU for separation processing
+- Requires torch, demucs, and other GPU dependencies
+"""
+
 import os
 from rich.console import Console
 from rich import print as rprint
@@ -8,6 +23,26 @@ console = Console()
 
 # Cloud API configuration
 DEMUCS_CLOUD_URL = os.getenv("DEMUCS_CLOUD_URL", "")
+
+
+def is_cloud_native():
+    """Check if cloud native mode is enabled in config"""
+    try:
+        from core.utils import load_key
+        return load_key("cloud_native.enabled", False)
+    except:
+        return False
+
+
+def is_cloud_separation_enabled():
+    """Check if cloud separation feature is enabled"""
+    try:
+        from core.utils import load_key
+        if not load_key("cloud_native.enabled", False):
+            return False
+        return load_key("cloud_native.features.separation", True)
+    except:
+        return False
 
 def get_cloud_url() -> str:
     """Get cloud URL from environment or config"""
@@ -154,7 +189,7 @@ def separate_audio_cloud(cloud_url: str = None):
 def demucs_audio():
     """
     Main entry point for Demucs audio separation
-    Automatically chooses between local and cloud processing
+    Automatically chooses between local and cloud processing based on configuration
     """
     if os.path.exists(_VOCAL_AUDIO_FILE) and os.path.exists(_BACKGROUND_AUDIO_FILE):
         rprint(f"[yellow]⚠️ {_VOCAL_AUDIO_FILE} and {_BACKGROUND_AUDIO_FILE} already exist, skip Demucs processing.[/yellow]")
@@ -162,9 +197,37 @@ def demucs_audio():
     
     os.makedirs(_AUDIO_DIR, exist_ok=True)
     
-    # Check if cloud URL is configured and available
+    # Check if cloud native mode is enabled
+    cloud_native_mode = is_cloud_native()
+    cloud_separation = is_cloud_separation_enabled()
     cloud_url = get_cloud_url()
     
+    if cloud_native_mode:
+        # Cloud Native Mode: Must use cloud processing
+        if not cloud_url:
+            raise ValueError(
+                "Cloud Native Mode is enabled but no cloud URL is configured.\n"
+                "Please set cloud_native.cloud_url in config.yaml"
+            )
+        
+        if not check_cloud_available(cloud_url):
+            raise ConnectionError(
+                f"Cloud Native Mode is enabled but cloud service is not available at {cloud_url}\n"
+                "Please ensure the cloud server is running and accessible."
+            )
+        
+        try:
+            console.print("[cyan]☁️ Cloud Native Mode: Using remote Demucs service...[/cyan]")
+            separate_audio_cloud(cloud_url)
+            console.print("[green]✨ Audio separation completed (cloud native)![/green]")
+            return
+        except Exception as e:
+            raise RuntimeError(
+                f"Cloud separation failed in Cloud Native Mode: {e}\n"
+                "Please check the cloud server status or disable cloud_native mode."
+            )
+    
+    # Legacy Mode: Try cloud first, then fallback to local
     if cloud_url and check_cloud_available(cloud_url):
         # Use cloud processing
         try:
@@ -182,10 +245,10 @@ def demucs_audio():
     except ImportError as e:
         rprint(f"[red]❌ {e}[/red]")
         rprint("[yellow]To use cloud Demucs:[/yellow]")
-        rprint("  1. Deploy unified server using whisperx_cloud/Unified_Cloud_Server.ipynb")
-        rprint("  2. Set whisper.whisperX_cloud_url in config.yaml")
+        rprint(" 1. Deploy unified server using whisperx_cloud/Unified_Cloud_Server.ipynb")
+        rprint(" 2. Set whisper.whisperX_cloud_url in config.yaml")
         rprint("[yellow]Or install demucs locally:[/yellow]")
-        rprint("  pip install demucs")
+        rprint(" pip install demucs")
         raise
 
 if __name__ == "__main__":

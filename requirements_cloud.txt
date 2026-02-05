@@ -1,0 +1,59 @@
+# VideoLingo Cloud Native Requirements
+# Lightweight dependencies for CPU-only deployment
+# All GPU-intensive processing (WhisperX, Demucs) is offloaded to remote cloud services
+
+# ============== Core Dependencies ==============
+requests>=2.32.3
+pydub==0.25.1
+pandas==2.2.3
+numpy==1.26.4
+openpyxl==3.1.5
+pyyaml==6.0.2
+rich>=13.0.0
+
+# ============== Video Processing (Lightweight) ==============
+moviepy==1.0.3
+opencv-python==4.10.0.84
+
+# ============== Audio Processing (Lightweight) ==============
+# Note: librosa is kept for audio analysis but without heavy ML dependencies
+librosa==0.10.2.post1
+resampy==0.4.3
+
+# ============== NLP (Lightweight) ==============
+spacy==3.7.4
+
+# ============== API Clients ==============
+openai==1.55.3
+edge-tts
+
+# ============== Web Framework (for UI) ==============
+streamlit==1.38.0
+
+# ============== Tools & Utilities ==============
+yt-dlp
+json-repair
+ruamel.yaml
+InquirerPy
+autocorrect-py
+syllables
+pypinyin
+g2p-en
+xmltodict
+
+# ============== Optional (for enhanced features) ==============
+# Uncomment if needed:
+# replicate==0.33.0  # Only if using replicate API for other features
+
+# ============== NOT Included (Handled by Cloud Services) ==============
+# The following heavy dependencies are NOT needed in Cloud Native Mode:
+# - torch==2.0.0
+# - torchaudio==2.0.0
+# - whisperx (heavy ASR with PyTorch)
+# - demucs (heavy audio separation with PyTorch)
+# - ctranslate2==4.4.0
+# - transformers==4.39.3 (unless needed for other features)
+# - pytorch-lightning==2.3.3
+# - lightning==2.3.3
+#
+# These are all handled by the remote cloud service running whisperx_cloud/

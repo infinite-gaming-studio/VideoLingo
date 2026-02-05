@@ -182,5 +182,31 @@ language_split_with_space:
 
 # Languages that do not use space as separator
 language_split_without_space:
-- 'zh'
-- 'ja'
+  - 'zh'
+  - 'ja'
+
+## ======================== Cloud Native Settings ======================== ##
+# 云原生模式配置 - 完全剥离本地GPU依赖,所有AI计算使用远程服务
+# Cloud Native Mode - Remove all local GPU dependencies, use remote services for AI
+cloud_native:
+  # 启用云原生模式 (将禁用所有本地GPU计算,仅保留轻量级处理)
+  # Enable cloud native mode (disable local GPU, keep lightweight processing only)
+  enabled: true
+  
+  # 远程服务统一URL (支持WhisperX ASR + Demucs 人声分离)
+  # Unified cloud service URL (supports WhisperX ASR + Demucs separation)
+  # 部署请参考 whisperx_cloud/Unified_Cloud_Server.ipynb
+  # Deploy reference: whisperx_cloud/Unified_Cloud_Server.ipynb
+  cloud_url: 'https://adiaphoristic-zaire-reminiscently.ngrok-free.dev'
+  
+  # 连接配置 / Connection settings
+  connection:
+    timeout: 300        # 请求超时(秒) / Request timeout (seconds)
+    max_retries: 3      # 最大重试次数 / Max retry attempts
+    retry_delay: 5      # 重试间隔(秒) / Retry delay (seconds)
+  
+  # 功能开关 (即使启用云原生,也可单独关闭某项)
+  # Feature toggles (can disable individual features even in cloud mode)
+  features:
+    asr: true           # 使用云端ASR / Use cloud ASR
+    separation: true    # 使用云端音频分离 / Use cloud audio separation
