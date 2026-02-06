@@ -49,7 +49,11 @@ def page_setting():
                 except: pass
 
             # Export as YAML (preferred) or JSON
-            yaml_output = pyyaml.dump(partial_config, allow_unicode=True, sort_keys=False)
+            from io import StringIO
+            yaml = YAML()
+            stream = StringIO()
+            yaml.dump(partial_config, stream)
+            yaml_output = stream.getvalue()
             
             st.download_button(
                 label=t("Export as YAML (.yaml) ⬇️"),
