@@ -179,7 +179,7 @@ def transcribe_audio_cloud(
                 
                 # Make request
                 response = requests.post(
-                    f"{url}/transcribe",
+                    f"{url}/asr/transcribe",
                     files=files,
                     data=data,
                     timeout=timeout,
@@ -311,7 +311,7 @@ class VideoLingoCloudClient:
             }
             
             response = self.session.post(
-                f"{self.base_url}/transcribe",
+                f"{self.base_url}/asr/transcribe",
                 files=files,
                 data=data,
                 timeout=timeout
