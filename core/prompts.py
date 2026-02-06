@@ -43,6 +43,52 @@ Note: Start you answer with ```json and end with ```, do not add any other text.
 """.strip()
     return split_prompt
 
+def get_batch_split_prompt(sentences_list, word_limit=20):
+    """
+    sentences_list: list of dicts {"index": int, "sentence": str, "num_parts": int}
+    """
+    language = load_key("whisper.detected_language")
+    
+    # Format the input sentences for the prompt
+    input_text = ""
+    for item in sentences_list:
+        input_text += f"ID: {item['index']}\nText: {item['sentence']}\nParts: {item['num_parts']}\n---\n"
+
+    batch_split_prompt = f"""
+## Role
+You are a professional Netflix subtitle splitter in **{language}**.
+
+## Task
+Split several subtitle segments. For each segment, split it into the specified number of parts, each less than **{word_limit}** words.
+
+1. Maintain sentence meaning coherence according to Netflix subtitle standards
+2. MOST IMPORTANT: Keep parts roughly equal in length (minimum 3 words each)
+3. Split at natural points like punctuation marks or conjunctions
+4. If provided text is repeated words, simply split at the middle of the repeated words.
+
+## Input Segments
+{input_text}
+
+## Output Requirements
+Output a JSON object where keys are the IDs of the segments. For each ID, provide:
+1. analysis: Brief description of splitting logic
+2. split: The result text with [br] tags at split positions
+
+## Output in only JSON format and no other text
+```json
+{{
+    "ID_1": {{
+        "analysis": "...",
+        "split": "part1 [br] part2"
+    }},
+    ...
+}}
+```
+
+Note: Start your answer with ```json and end with ```, do not add any other text.
+""".strip()
+    return batch_split_prompt
+
 """{{
     "analysis": "Brief analysis of the text structure",
     "split": "Complete sentence with [br] tags at split positions"
@@ -311,7 +357,7 @@ def get_subtitle_trim_prompt(text, duration):
 ## Role
 You are a professional subtitle editor, editing and optimizing lengthy subtitles that exceed voiceover time before handing them to voice actors. 
 Your expertise lies in cleverly shortening subtitles slightly while ensuring the original meaning and structure remain unchanged.
-
+ 
 ## INPUT
 <subtitles>
 Subtitle: "{text}"
@@ -336,6 +382,46 @@ Please follow these steps and provide the results in the JSON output:
 
 Note: Start you answer with ```json and end with ```, do not add any other text.
 '''.strip()
+    return trim_prompt
+
+def get_batch_subtitle_trim_prompt(batches, duration_limit):
+    """
+    batches: list of dicts {"id": int, "text": str, "duration": float}
+    """
+    rule = '''Consider a. Reducing filler words without modifying meaningful content. b. Omitting unnecessary modifiers or pronouns, for example:
+    - "Please explain your thought process" can be shortened to "Please explain thought process"
+    - "We need to carefully analyze this complex problem" can be shortened to "We need to analyze this problem"
+    - "Let's discuss the various different perspectives on this topic" can be shortened to "Let's discuss different perspectives on this topic"
+    - "Can you describe in detail your experience from yesterday" can be shortened to "Can you describe yesterday's experience" '''
+
+    input_text = ""
+    for item in batches:
+        input_text += f"ID: {item['id']}\nText: \"{item['text']}\"\nDuration Limit: {item['duration']} seconds\n---\n"
+
+    trim_prompt = f"""
+## Role
+You are a professional subtitle editor. Your task is to shorten multiple subtitles to fit their respective time durations while preserving meaning.
+
+## Input Subtitles
+{input_text}
+
+## Processing Rules
+{rule}
+
+## Output Requirements
+Output a JSON object where keys are the IDs. Each value should be the optimized and shortened subtitle.
+
+## Output in only JSON format and no other text
+```json
+{{
+    "ID_1": "shortened text 1",
+    "ID_2": "shortened text 2",
+    ...
+}}
+```
+
+Note: Start your answer with ```json and end with ```, do not add any other text.
+""".strip()
     return trim_prompt
 
 ## ================================================================

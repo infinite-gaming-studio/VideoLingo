@@ -15,33 +15,41 @@ TRANS_SUBS_FOR_AUDIO_FILE = 'output/audio/trans_subs_for_audio.srt'
 SRC_SUBS_FOR_AUDIO_FILE = 'output/audio/src_subs_for_audio.srt'
 ESTIMATOR = None
 
+def batch_trim_subtitles(batches, retry_attempt=0):
+    """Shorten multiple subtitles in a batch using GPT."""
+    if not batches:
+        return {}
+    
+    # Take duration from the first item since they should use same logic
+    duration_limit = batches[0]['duration'] 
+    prompt = get_batch_subtitle_trim_prompt(batches, duration_limit)
+    
+    def valid_batch_trim(response):
+        for item in batches:
+            if str(item['id']) not in response:
+                return {'status': 'error', 'message': f'Missing ID {item["id"]} in response'}
+        return {'status': 'success', 'message': ''}
+    
+    try:
+        response = ask_gpt(prompt + " " * retry_attempt, resp_type='json', log_title='batch_sub_trim', valid_def=valid_batch_trim)
+        return response
+    except Exception as e:
+        rprint(f"[bold red]Batch trimming failed: {e}, falling back to manual punctuation removal[/bold red]")
+        fallback_results = {}
+        for item in batches:
+            fallback_results[str(item['id'])] = re.sub(r'[,.!?;:，。！？；：]', ' ', item['text']).strip()
+        return fallback_results
+
 def check_len_then_trim(text, duration):
+    """Check if a subtitle needs trimming. (Maintained for backward compatibility but prefers batching)"""
     global ESTIMATOR
     if ESTIMATOR is None:
         ESTIMATOR = init_estimator()
     estimated_duration = estimate_duration(text, ESTIMATOR) / speed_factor['max']
     
-    console.print(f"Subtitle text: {text}, "
-                  f"[bold green]Estimated reading duration: {estimated_duration:.2f} seconds[/bold green]")
-
     if estimated_duration > duration:
-        rprint(Panel(f"Estimated reading duration {estimated_duration:.2f} seconds exceeds given duration {duration:.2f} seconds, shortening...", title="Processing", border_style="yellow"))
-        original_text = text
-        prompt = get_subtitle_trim_prompt(text, duration)
-        def valid_trim(response):
-            if 'result' not in response:
-                return {'status': 'error', 'message': 'No result in response'}
-            return {'status': 'success', 'message': ''}
-        try:    
-            response = ask_gpt(prompt, resp_type='json', log_title='sub_trim', valid_def=valid_trim)
-            shortened_text = response['result']
-        except Exception:
-            rprint("[bold red]🚫 AI refused to answer due to sensitivity, so manually remove punctuation[/bold red]")
-            shortened_text = re.sub(r'[,.!?;:，。！？；：]', ' ', text).strip()
-        rprint(Panel(f"Subtitle before shortening: {original_text}\nSubtitle after shortening: {shortened_text}", title="Subtitle Shortening Result", border_style="green"))
-        return shortened_text
-    else:
-        return text
+        return True, estimated_duration
+    return False, estimated_duration
 
 def time_diff_seconds(t1, t2, base_date):
     """Calculate the difference in seconds between two time objects"""

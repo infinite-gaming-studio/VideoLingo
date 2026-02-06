@@ -53,8 +53,8 @@ def similar(a, b):
 # 🚀 Main function to translate all chunks
 @check_file_exists(_4_2_TRANSLATION)
 def translate_all():
-    console.print("[bold green]Start Translating All...[/bold green]")
-    chunks = split_chunks_by_chars(chunk_size=600, max_i=10)
+    # Increase chunk size to 1000 characters and max sentences per chunk to 20
+    chunks = split_chunks_by_chars(chunk_size=1000, max_i=20)
     with open(_4_1_TERMINOLOGY, 'r', encoding='utf-8') as file:
         theme_prompt = json.load(file).get('theme')
 
@@ -103,9 +103,29 @@ def translate_all():
     df_translate = pd.DataFrame({'Source': src_text, 'Translation': trans_text})
     subtitle_output_configs = [('trans_subs_for_audio.srt', ['Translation'])]
     df_time = align_timestamp(df_text, df_translate, subtitle_output_configs, output_dir=None, for_display=False)
-    console.print(df_time)
-    # apply check_len_then_trim to df_time['Translation'], only when duration > MIN_TRIM_DURATION.
-    df_time['Translation'] = df_time.apply(lambda x: check_len_then_trim(x['Translation'], x['duration']) if x['duration'] > load_key("min_trim_duration") else x['Translation'], axis=1)
+    
+    # --- Batched Trimming Logic ---
+    from core._8_1_audio_task import batch_trim_subtitles
+    min_trim_duration = load_key("min_trim_duration")
+    
+    to_trim = []
+    for idx, row in df_time.iterrows():
+        if row['duration'] > min_trim_duration:
+            needs_trim, est_dur = check_len_then_trim(row['Translation'], row['duration'])
+            if needs_trim:
+                to_trim.append({'id': idx, 'text': row['Translation'], 'duration': row['duration']})
+    
+    if to_trim:
+        console.print(f"[yellow]Found {len(to_trim)} subtitles needing trimming. Processing in batches...[/yellow]")
+        # Process in batches of 10
+        batch_size = 10
+        for i in range(0, len(to_trim), batch_size):
+            batch = to_trim[i:i+batch_size]
+            trimmed_results = batch_trim_subtitles(batch)
+            for tid, ttext in trimmed_results.items():
+                df_time.at[int(tid), 'Translation'] = ttext
+        console.print("[green]✅ Batched trimming completed.[/green]")
+    
     console.print(df_time)
     
     df_time.to_excel(_4_2_TRANSLATION, index=False)

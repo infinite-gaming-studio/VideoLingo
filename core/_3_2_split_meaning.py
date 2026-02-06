@@ -45,67 +45,88 @@ def find_split_positions(original, modified):
 
     return split_positions
 
-def split_sentence(sentence, num_parts, word_limit=20, index=-1, retry_attempt=0):
-    """Split a long sentence using GPT and return the result as a string."""
-    split_prompt = get_split_prompt(sentence, num_parts, word_limit)
-    def valid_split(response_data):
-        choice = response_data["choice"]
-        if f'split{choice}' not in response_data:
-            return {"status": "error", "message": "Missing required key: `split`"}
-        if "[br]" not in response_data[f"split{choice}"]:
-            return {"status": "error", "message": "Split failed, no [br] found"}
-        return {"status": "success", "message": "Split completed"}
+def batch_split_sentences(sentences_to_split, word_limit=20, retry_attempt=0):
+    """Split a batch of long sentences using GPT."""
+    if not sentences_to_split:
+        return {}
     
-    response_data = ask_gpt(split_prompt + " " * retry_attempt, resp_type='json', valid_def=valid_split, log_title='split_by_meaning')
-    choice = response_data["choice"]
-    best_split = response_data[f"split{choice}"]
-    split_points = find_split_positions(sentence, best_split)
-    # split the sentence based on the split points
-    for i, split_point in enumerate(split_points):
-        if i == 0:
-            best_split = sentence[:split_point] + '\n' + sentence[split_point:]
-        else:
-            parts = best_split.split('\n')
-            last_part = parts[-1]
-            parts[-1] = last_part[:split_point - split_points[i-1]] + '\n' + last_part[split_point - split_points[i-1]:]
-            best_split = '\n'.join(parts)
-    if index != -1:
-        console.print(f'[green]✅ Sentence {index} has been successfully split[/green]')
-    table = Table(title="")
-    table.add_column("Type", style="cyan")
-    table.add_column("Sentence")
-    table.add_row("Original", sentence, style="yellow")
-    table.add_row("Split", best_split.replace('\n', ' ||'), style="yellow")
-    console.print(table)
+    prompt = get_batch_split_prompt(sentences_to_split, word_limit)
     
-    return best_split
+    def valid_batch_split(response_data):
+        for item in sentences_to_split:
+            idx_str = str(item['index'])
+            if idx_str not in response_data:
+                return {"status": "error", "message": f"Missing ID {idx_str} in response"}
+            if "[br]" not in response_data[idx_str].get("split", ""):
+                # We don't necessarily error out if ONE fails, but here we want to ensure splitting happened
+                pass 
+        return {"status": "success", "message": "Batch split completed"}
+
+    try:
+        response_data = ask_gpt(prompt + " " * retry_attempt, resp_type='json', valid_def=valid_batch_split, log_title='batch_split_by_meaning')
+    except Exception as e:
+        console.print(f"[red]Batch split failed: {e}[/red]")
+        return {}
+
+    results = {}
+    for item in sentences_to_split:
+        idx_str = str(item['index'])
+        if idx_str in response_data:
+            best_split_raw = response_data[idx_str]["split"]
+            sentence = item['sentence']
+            split_points = find_split_positions(sentence, best_split_raw)
+            
+            best_split = sentence
+            # split the sentence based on the split points
+            for i, split_point in enumerate(split_points):
+                if i == 0:
+                    best_split = sentence[:split_point] + '\n' + sentence[split_point:]
+                else:
+                    parts = best_split.split('\n')
+                    last_part = parts[-1]
+                    parts[-1] = last_part[:split_point - split_points[i-1]] + '\n' + last_part[split_point - split_points[i-1]:]
+                    best_split = '\n'.join(parts)
+            
+            results[item['index']] = best_split
+            
+            table = Table(title=f"Sentence {item['index']} Split")
+            table.add_column("Type", style="cyan")
+            table.add_column("Sentence")
+            table.add_row("Original", sentence, style="yellow")
+            table.add_row("Split", best_split.replace('\n', ' ||'), style="yellow")
+            console.print(table)
+            
+    return results
 
 def parallel_split_sentences(sentences, max_length, max_workers, nlp, retry_attempt=0):
-    """Split sentences in parallel using a thread pool."""
+    """Split sentences using batching."""
     new_sentences = [None] * len(sentences)
-    futures = []
+    to_split = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for index, sentence in enumerate(sentences):
-            # Use tokenizer to split the sentence
-            tokens = tokenize_sentence(sentence, nlp)
-            # print("Tokenization result:", tokens)
-            num_parts = math.ceil(len(tokens) / max_length)
-            if len(tokens) > max_length:
-                future = executor.submit(split_sentence, sentence, num_parts, max_length, index=index, retry_attempt=retry_attempt)
-                futures.append((future, index, num_parts, sentence))
-            else:
-                if retry_attempt == 0:
-                    console.print(f"[grey]Sentence {index} is short ({len(tokens)} tokens), skip splitting.[/grey]")
-                new_sentences[index] = [sentence]
+    for index, sentence in enumerate(sentences):
+        tokens = tokenize_sentence(sentence, nlp)
+        num_parts = math.ceil(len(tokens) / max_length)
+        if len(tokens) > max_length:
+            to_split.append({"index": index, "sentence": sentence, "num_parts": num_parts})
+        else:
+            if retry_attempt == 0:
+                console.print(f"[grey]Sentence {index} is short ({len(tokens)} tokens), skip splitting.[/grey]")
+            new_sentences[index] = [sentence]
 
-        for future, index, num_parts, sentence in futures:
-            split_result = future.result()
+    # Batch size of 5 for splitting to avoid too large prompts/responses
+    batch_size = 5
+    for i in range(0, len(to_split), batch_size):
+        batch = to_split[i:i + batch_size]
+        batch_results = batch_split_sentences(batch, max_length, retry_attempt)
+        for idx, split_result in batch_results.items():
             if split_result:
                 split_lines = split_result.strip().split('\n')
-                new_sentences[index] = [line.strip() for line in split_lines]
-            else:
-                new_sentences[index] = [sentence]
+                new_sentences[idx] = [line.strip() for line in split_lines]
+    
+    # Fill in any that failed (optional, currently it'll stay None and we handle it)
+    for i in range(len(new_sentences)):
+        if new_sentences[i] is None:
+            new_sentences[i] = [sentences[i]]
 
     return [sentence for sublist in new_sentences for sentence in sublist]
 
