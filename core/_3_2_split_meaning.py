@@ -138,7 +138,14 @@ def parallel_split_sentences(sentences_data, max_length, max_workers, nlp, retry
         tokens = tokenize_sentence(sentence, nlp)
         num_parts = math.ceil(len(tokens) / max_length)
         if len(tokens) > max_length:
-            to_split.append({"index": index, "sentence": sentence, "num_parts": num_parts, "speaker_id": speaker_id})
+            to_split.append({
+                "index": index, 
+                "sentence": sentence, 
+                "num_parts": num_parts, 
+                "speaker_id": speaker_id,
+                "start": item['start'],
+                "end": item['end']
+            })
         else:
             if retry_attempt == 0:
                 console.print(f"[grey]Sentence {index} is short ({len(tokens)} tokens), skip splitting.[/grey]")

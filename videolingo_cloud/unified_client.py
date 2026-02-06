@@ -147,9 +147,9 @@ def transcribe_audio_cloud(
                     'align': str(align).lower(),
                     'speaker_diarization': str(speaker_diarization).lower()
                 }
-                if min_speakers is not None:
+                if min_speakers not in [None, '', 0]:
                     data['min_speakers'] = min_speakers
-                if max_speakers is not None:
+                if max_speakers not in [None, '', 0]:
                     data['max_speakers'] = max_speakers
                 
                 response = requests.post(

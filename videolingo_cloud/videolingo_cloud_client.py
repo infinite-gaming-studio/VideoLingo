@@ -198,9 +198,9 @@ def transcribe_audio_cloud(
                     'align': str(align).lower(),
                     'speaker_diarization': str(speaker_diarization).lower()
                 }
-                if min_speakers is not None:
+                if min_speakers not in [None, '', 0]:
                     data['min_speakers'] = min_speakers
-                if max_speakers is not None:
+                if max_speakers not in [None, '', 0]:
                     data['max_speakers'] = max_speakers
                 
                 vprint(f"[blue]📤 Request Data:[/blue] {data}")
@@ -339,10 +339,12 @@ class VideoLingoCloudClient:
                 'language': language if language else '',
                 'model': model,
                 'align': str(align).lower(),
-                'speaker_diarization': str(speaker_diarization).lower(),
-                'min_speakers': min_speakers if min_speakers is not None else '',
-                'max_speakers': max_speakers if max_speakers is not None else ''
+                'speaker_diarization': str(speaker_diarization).lower()
             }
+            if min_speakers not in [None, '', 0]:
+                data['min_speakers'] = min_speakers
+            if max_speakers not in [None, '', 0]:
+                data['max_speakers'] = max_speakers
             
             response = self.session.post(
                 f"{self.base_url}/asr/transcribe",

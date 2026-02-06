@@ -124,5 +124,9 @@
     "Enable speaker diarization (multi-role detection). Cloud runtime only.": "启用角色识别（多发言人检测），仅限云端模式。",
     "Min Speakers": "最小角色数",
     "Max Speakers": "最大角色数",
-    "Set the range of speakers for diarization.": "设置角色识别的人数范围。"
+    "Set the range of speakers for diarization.": "设置角色识别的人数范围。",
+    "Debug Mode": "调试模式",
+    "Enable detailed logging for debugging": "启用详细日志记录用于调试",
+    "Cloud runtime requires 302ai API key, elevenlabs runtime requires ElevenLabs API key": "云端运行环境需要 302.AI API 密钥，ElevenLabs 运行环境需要 ElevenLabs API 密钥",
+    "Please configure speaker voices above before starting audio processing.": "在开始音频处理前，请先配置上方的发言人语音。"
 }
