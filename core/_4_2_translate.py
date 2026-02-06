@@ -15,36 +15,51 @@ console = Console()
 # Function to split text into chunks
 def split_chunks_by_chars(chunk_size, max_i): 
     """Split text into chunks based on character count, return a list of multi-line text chunks"""
-    with open(_3_2_SPLIT_BY_MEANING, "r", encoding="utf-8") as file:
-        sentences = file.read().strip().split('\n')
+    df = pd.read_excel(_3_2_SPLIT_BY_MEANING)
+    sentences_data = df.to_dict('records')
 
     chunks = []
-    chunk = ''
+    chunk = []
+    current_char_count = 0
     sentence_count = 0
-    for sentence in sentences:
-        if len(chunk) + len(sentence + '\n') > chunk_size or sentence_count == max_i:
-            chunks.append(chunk.strip())
-            chunk = sentence + '\n'
+    for item in sentences_data:
+        sentence = str(item['text'])
+        speaker_id = item.get('speaker_id', None)
+        # Prefix with speaker for context
+        prefix = f"[{speaker_id}]: " if speaker_id is not None else ""
+        labeled_sentence = prefix + sentence
+        
+        if current_char_count + len(labeled_sentence + '\n') > chunk_size or sentence_count == max_i:
+            chunks.append("\n".join(chunk))
+            chunk = [labeled_sentence]
+            current_char_count = len(labeled_sentence + '\n')
             sentence_count = 1
         else:
-            chunk += sentence + '\n'
+            chunk.append(labeled_sentence)
+            current_char_count += len(labeled_sentence + '\n')
             sentence_count += 1
-    chunks.append(chunk.strip())
+    if chunk:
+        chunks.append("\n".join(chunk))
     return chunks
 
 # Get context from surrounding chunks
 def get_previous_content(chunks, chunk_index):
-    return None if chunk_index == 0 else chunks[chunk_index - 1].split('\n')[-3:] # Get last 3 lines
+    if chunk_index == 0: return None
+    lines = chunks[chunk_index - 1].split('\n')
+    return lines[-3:] # Get last 3 lines
 def get_after_content(chunks, chunk_index):
-    return None if chunk_index == len(chunks) - 1 else chunks[chunk_index + 1].split('\n')[:2] # Get first 2 lines
+    if chunk_index == len(chunks) - 1: return None
+    lines = chunks[chunk_index + 1].split('\n')
+    return lines[:2] # Get first 2 lines
 
 # 🔍 Translate a single chunk
 def translate_chunk(chunk, chunks, theme_prompt, i):
     things_to_note_prompt = search_things_to_note_in_prompt(chunk)
     previous_content_prompt = get_previous_content(chunks, i)
     after_content_prompt = get_after_content(chunks, i)
-    translation, english_result = translate_lines(chunk, previous_content_prompt, after_content_prompt, things_to_note_prompt, theme_prompt, i)
-    return i, english_result, translation
+    # translate_lines expects strings
+    translation, original_with_speakers = translate_lines(chunk, previous_content_prompt, after_content_prompt, things_to_note_prompt, theme_prompt, i)
+    return i, original_with_speakers, translation
 
 # Add similarity calculation function
 def similar(a, b):
@@ -77,30 +92,28 @@ def translate_all():
     results.sort(key=lambda x: x[0])  # Sort results based on original order
     
     # 💾 Save results to lists and Excel file
-    src_text, trans_text = [], []
-    for i, chunk in enumerate(chunks):
-        chunk_lines = chunk.split('\n')
-        src_text.extend(chunk_lines)
+    src_text, trans_text, speaker_ids = [], [], []
+    df_source = pd.read_excel(_3_2_SPLIT_BY_MEANING)
+    
+    # Reconstruct src_text and trans_text from results
+    # results is a list of (index, original_with_speakers, translation)
+    total_lines = 0
+    for i, chunk_str in enumerate(chunks):
+        chunk_results = [r for r in results if r[0] == i][0]
+        original_lines = chunk_results[1].split('\n')
+        translated_lines = chunk_results[2].split('\n')
         
-        # Calculate similarity between current chunk and translation results
-        chunk_text = ''.join(chunk_lines).lower()
-        matching_results = [(r, similar(''.join(r[1].split('\n')).lower(), chunk_text)) 
-                          for r in results]
-        best_match = max(matching_results, key=lambda x: x[1])
-        
-        # Check similarity and handle exceptions
-        if best_match[1] < 0.9:
-            console.print(f"[yellow]Warning: No matching translation found for chunk {i}[/yellow]")
-            raise ValueError(f"Translation matching failed (chunk {i})")
-        elif best_match[1] < 1.0:
-            console.print(f"[yellow]Warning: Similar match found (chunk {i}, similarity: {best_match[1]:.3f})[/yellow]")
-            
-        trans_text.extend(best_match[0][2].split('\n'))
+        for orig, trans in zip(original_lines, translated_lines):
+            # Strip speaker prefix from orig for saving if needed, but we already have df_source
+            src_text.append(df_source.iloc[total_lines]['text'])
+            speaker_ids.append(df_source.iloc[total_lines]['speaker_id'])
+            trans_text.append(trans)
+            total_lines += 1
     
     # Trim long translation text
     df_text = pd.read_excel(_2_CLEANED_CHUNKS)
     df_text['text'] = df_text['text'].str.strip('"').str.strip()
-    df_translate = pd.DataFrame({'Source': src_text, 'Translation': trans_text})
+    df_translate = pd.DataFrame({'Source': src_text, 'Translation': trans_text, 'speaker_id': speaker_ids})
     subtitle_output_configs = [('trans_subs_for_audio.srt', ['Translation'])]
     df_time = align_timestamp(df_text, df_translate, subtitle_output_configs, output_dir=None, for_display=False)
     

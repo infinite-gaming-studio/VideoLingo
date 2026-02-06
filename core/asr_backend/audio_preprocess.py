@@ -20,15 +20,15 @@ def normalize_audio_volume(audio_path, output_path, target_db = -20.0, format = 
 def convert_video_to_audio(video_file: str):
     os.makedirs(_AUDIO_DIR, exist_ok=True)
     if not os.path.exists(_RAW_AUDIO_FILE):
-        rprint(f"[blue]🎬➡️🎵 Converting to high quality audio with FFmpeg ......[/blue]")
+        rprint(f"[blue]🎬  ➡️  🎵 Converting to high quality audio with FFmpeg ......[/blue]")
         subprocess.run([
             'ffmpeg', '-y', '-i', video_file, '-vn',
-            '-c:a', 'libmp3lame', '-b:a', '32k',
-            '-ar', '16000',
-            '-ac', '1', 
+            '-c:a', 'libmp3lame', '-b:a', '128k',
+            '-ar', '44100',
+            '-ac', '2', 
             '-metadata', 'encoding=UTF-8', _RAW_AUDIO_FILE
         ], check=True, stderr=subprocess.PIPE)
-        rprint(f"[green]🎬➡️🎵 Converted <{video_file}> to <{_RAW_AUDIO_FILE}> with FFmpeg\n[/green]")
+        rprint(f"[green]🎬  ➡️  🎵 Converted <{video_file}> to <{_RAW_AUDIO_FILE}> with FFmpeg\n[/green]")
 
 def get_audio_duration(audio_file: str) -> float:
     """Get the duration of an audio file using ffmpeg."""

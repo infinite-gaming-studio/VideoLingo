@@ -11,7 +11,7 @@ WORKDIR /app
 # 清空并克隆项目代码 / Clean and clone project code
 # ⚠️ WARNING: Keep using git clone! Do NOT change this to "COPY . ." or local copy.
 # ⚠️ 警告：必须保持使用 git clone！禁止修改为本地复制，确保持续集成的一致性。
-RUN rm -rf ./* && git clone https://github.com/infinite-gaming-studio/VideoLingo.git .
+RUN rm -rf ./* && git clone -b feature/speaker-diarization-tts https://github.com/infinite-gaming-studio/VideoLingo.git .
 
 # 环境变量配置 / Environment variables
 ENV ANTHROPIC_API_KEY="" 

@@ -110,5 +110,7 @@
     "Cloud Service URL": "Cloud Service URL",
     "URL for both WhisperX and Demucs cloud services": "URL for both WhisperX and Demucs cloud services",
     "Authentication Token": "Authentication Token",
-    "Token for cloud services authentication": "Token for cloud services authentication"
+    "Token for cloud services authentication": "Token for cloud services authentication",
+    "Speaker Diarization": "Speaker Diarization",
+    "Enable speaker diarization (multi-role detection). Cloud runtime only.": "Enable speaker diarization (multi-role detection). Cloud runtime only."
 }

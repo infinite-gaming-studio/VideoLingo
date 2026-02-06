@@ -36,6 +36,9 @@ whisper:
   # ElevenLabs API key
   elevenlabs_api_key: ''
 
+  # Speaker Diarization (Multi-role detection)
+  diarization: false
+
 # ==================== 云端服务统一配置 ====================
 # 推荐使用此配置方式，所有服务使用同一个云端地址和令牌
 cloud_native:
@@ -67,6 +70,11 @@ pause_before_translate: false
 
 # ==================== TTS 配置 ====================
 tts_method: 'edge_tts'
+
+# Speaker to Voice mapping
+speaker_voices:
+  SPEAKER_00: 'en-US-JennyNeural'
+  SPEAKER_01: 'en-US-GuyNeural'
 
 # SiliconFlow FishTTS
 sf_fish_tts:

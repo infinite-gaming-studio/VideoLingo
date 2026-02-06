@@ -98,20 +98,24 @@ def batch_split_sentences(sentences_to_split, word_limit=20, retry_attempt=0):
             
     return results
 
-def parallel_split_sentences(sentences, max_length, max_workers, nlp, retry_attempt=0):
+import pandas as pd
+
+def parallel_split_sentences(sentences_data, max_length, max_workers, nlp, retry_attempt=0):
     """Split sentences using batching."""
-    new_sentences = [None] * len(sentences)
+    new_sentences_data = [None] * len(sentences_data)
     to_split = []
 
-    for index, sentence in enumerate(sentences):
+    for index, item in enumerate(sentences_data):
+        sentence = item['text']
+        speaker_id = item['speaker_id']
         tokens = tokenize_sentence(sentence, nlp)
         num_parts = math.ceil(len(tokens) / max_length)
         if len(tokens) > max_length:
-            to_split.append({"index": index, "sentence": sentence, "num_parts": num_parts})
+            to_split.append({"index": index, "sentence": sentence, "num_parts": num_parts, "speaker_id": speaker_id})
         else:
             if retry_attempt == 0:
                 console.print(f"[grey]Sentence {index} is short ({len(tokens)} tokens), skip splitting.[/grey]")
-            new_sentences[index] = [sentence]
+            new_sentences_data[index] = [item]
 
     # Batch size of 5 for splitting to avoid too large prompts/responses
     batch_size = 5
@@ -121,30 +125,31 @@ def parallel_split_sentences(sentences, max_length, max_workers, nlp, retry_atte
         for idx, split_result in batch_results.items():
             if split_result:
                 split_lines = split_result.strip().split('\n')
-                new_sentences[idx] = [line.strip() for line in split_lines]
+                speaker_id = to_split[next(i for i, x in enumerate(to_split) if x['index'] == idx)]['speaker_id']
+                new_sentences_data[idx] = [{'text': line.strip(), 'speaker_id': speaker_id} for line in split_lines]
     
-    # Fill in any that failed (optional, currently it'll stay None and we handle it)
-    for i in range(len(new_sentences)):
-        if new_sentences[i] is None:
-            new_sentences[i] = [sentences[i]]
+    # Fill in any that failed
+    for i in range(len(new_sentences_data)):
+        if new_sentences_data[i] is None:
+            new_sentences_data[i] = [sentences_data[i]]
 
-    return [sentence for sublist in new_sentences for sentence in sublist]
+    return [item for sublist in new_sentences_data for item in sublist]
 
 @check_file_exists(_3_2_SPLIT_BY_MEANING)
 def split_sentences_by_meaning():
     """The main function to split sentences by meaning."""
     # read input sentences
-    with open(_3_1_SPLIT_BY_NLP, 'r', encoding='utf-8') as f:
-        sentences = [line.strip() for line in f.readlines()]
+    df = pd.read_excel(_3_1_SPLIT_BY_NLP)
+    sentences_data = df.to_dict('records')
 
     nlp = init_nlp()
     # 🔄 process sentences multiple times to ensure all are split
     for retry_attempt in range(3):
-        sentences = parallel_split_sentences(sentences, max_length=load_key("max_split_length"), max_workers=load_key("max_workers"), nlp=nlp, retry_attempt=retry_attempt)
+        sentences_data = parallel_split_sentences(sentences_data, max_length=load_key("max_split_length"), max_workers=load_key("max_workers"), nlp=nlp, retry_attempt=retry_attempt)
 
     # 💾 save results
-    with open(_3_2_SPLIT_BY_MEANING, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(sentences))
+    df_output = pd.DataFrame(sentences_data)
+    df_output.to_excel(_3_2_SPLIT_BY_MEANING, index=False)
     console.print('[green]✅ All sentences have been successfully split![/green]')
 
 if __name__ == '__main__':

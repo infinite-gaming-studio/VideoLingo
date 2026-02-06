@@ -3,11 +3,16 @@ from core.utils import *
 import json
 
 @except_handler("Failed to generate audio using 302.ai Fish TTS", retry=3, delay=1)
-def fish_tts(text: str, save_as: str) -> bool:
+def fish_tts(text: str, save_as: str, voice: str = None) -> bool:
     """302.ai Fish TTS conversion"""
     API_KEY = load_key("fish_tts.api_key")
-    character = load_key("fish_tts.character")
-    refer_id = load_key("fish_tts.character_id_dict")[character]
+    char_id_dict = load_key("fish_tts.character_id_dict")
+    
+    if voice is not None:
+        refer_id = char_id_dict.get(voice, voice)
+    else:
+        character = load_key("fish_tts.character")
+        refer_id = char_id_dict[character]
     
     url = "https://api.302.ai/fish-audio/v1/tts"
     payload = json.dumps({

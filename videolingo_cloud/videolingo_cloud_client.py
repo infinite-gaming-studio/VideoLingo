@@ -132,6 +132,8 @@ def transcribe_audio_cloud(
     model: str = "large-v3",
     align: bool = True,
     speaker_diarization: bool = False,
+    min_speakers: Optional[int] = None,
+    max_speakers: Optional[int] = None,
     timeout: int = DEFAULT_TIMEOUT,
     token: str = None
 ) -> Dict[str, Any]:
@@ -194,7 +196,9 @@ def transcribe_audio_cloud(
                     'language': language if language else '',
                     'model': model,
                     'align': str(align).lower(),
-                    'speaker_diarization': str(speaker_diarization).lower()
+                    'speaker_diarization': str(speaker_diarization).lower(),
+                    'min_speakers': min_speakers if min_speakers is not None else '',
+                    'max_speakers': max_speakers if max_speakers is not None else ''
                 }
                 
                 # Make request
@@ -308,6 +312,8 @@ class VideoLingoCloudClient:
         model: str = "large-v3",
         align: bool = True,
         speaker_diarization: bool = False,
+        min_speakers: Optional[int] = None,
+        max_speakers: Optional[int] = None,
         timeout: int = DEFAULT_TIMEOUT
     ) -> Dict[str, Any]:
         """
@@ -327,7 +333,9 @@ class VideoLingoCloudClient:
                 'language': language if language else '',
                 'model': model,
                 'align': str(align).lower(),
-                'speaker_diarization': str(speaker_diarization).lower()
+                'speaker_diarization': str(speaker_diarization).lower(),
+                'min_speakers': min_speakers if min_speakers is not None else '',
+                'max_speakers': max_speakers if max_speakers is not None else ''
             }
             
             response = self.session.post(
@@ -400,12 +408,14 @@ def transcribe_audio_cloud_compatible(
         cloud_url = get_cloud_url()
         model = load_key("whisper.model", "large-v3")
         token = get_cloud_token()
+        diarization = load_key("whisper.diarization", False)
     except Exception as e:
         # Fallback to defaults
         whisper_language = "en"
         cloud_url = get_cloud_url()
         model = "large-v3"
         token = get_cloud_token()
+        diarization = False
     
     if not cloud_url:
         raise ValueError(
@@ -425,6 +435,7 @@ def transcribe_audio_cloud_compatible(
         cloud_url=cloud_url,
         language=whisper_language if whisper_language != 'auto' else None,
         model=model,
+        speaker_diarization=diarization,
         token=token
     )
 

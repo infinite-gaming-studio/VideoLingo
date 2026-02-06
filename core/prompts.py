@@ -205,17 +205,18 @@ Your expertise lies in accurately understanding the semantics and structure of t
 
 ## Task
 We have a segment of original {src_language} subtitles that need to be directly translated into {TARGET_LANGUAGE}. These subtitles come from a specific context and may contain specific themes and terminology.
+The lines may be prefixed with `[SPEAKER_N]:` to indicate different speakers. Use this information to better understand the dialogue context (e.g., gender, tone, relationships), but **DO NOT** include the speaker prefix in your translation result.
 
 1. Translate the original {src_language} subtitles into {TARGET_LANGUAGE} line by line
 2. Ensure the translation is faithful to the original, accurately conveying the original meaning
-3. Consider the context and professional terminology
+3. Consider the context (including speaker info) and professional terminology
 
 {shared_prompt}
 
 <translation_principles>
 1. Faithful to the original: Accurately convey the content and meaning of the original text, without arbitrarily changing, adding, or omitting content.
 2. Accurate terminology: Use professional terms correctly and maintain consistency in terminology.
-3. Understand the context: Fully comprehend and reflect the background and contextual relationships of the text.
+3. Understand the context: Fully comprehend and reflect the background and contextual relationships of the text (e.g. who is speaking).
 </translation_principles>
 
 ## INPUT
@@ -255,6 +256,7 @@ Your expertise lies not only in accurately understanding the original {src_langu
 ## Task
 We already have a direct translation version of the original {src_language} subtitles.
 Your task is to reflect on and improve these direct translations to create more natural and fluent {TARGET_LANGUAGE} subtitles.
+The original lines may be prefixed with `[SPEAKER_N]:` to indicate different speakers. Use this information to better understand the dialogue context, but **DO NOT** include the speaker prefix in your free translation result.
 
 1. Analyze the direct translation results line by line, pointing out existing issues
 2. Provide detailed modification suggestions
@@ -269,13 +271,13 @@ Please use a two-step thinking process to handle the text line by line:
 
 1. Direct Translation Reflection:
    - Evaluate language fluency
-   - Check if the language style is consistent with the original text
+   - Check if the language style is consistent with the original text and context (speaker)
    - Check the conciseness of the subtitles, point out where the translation is too wordy
 
 2. {TARGET_LANGUAGE} Free Translation:
    - Aim for contextual smoothness and naturalness, conforming to {TARGET_LANGUAGE} expression habits
    - Ensure it's easy for {TARGET_LANGUAGE} audience to understand and accept
-   - Adapt the language style to match the theme (e.g., use casual language for tutorials, professional terminology for technical content, formal language for documentaries)
+   - Adapt the language style to match the theme and speaker (e.g. different tones for different characters)
 </Translation Analysis Steps>
    
 ## INPUT

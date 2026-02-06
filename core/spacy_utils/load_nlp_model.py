@@ -29,6 +29,6 @@ def init_nlp():
 # --------------------
 # define the intermediate files
 # --------------------
-SPLIT_BY_COMMA_FILE = "output/log/split_by_comma.txt"
-SPLIT_BY_CONNECTOR_FILE = "output/log/split_by_connector.txt"
-SPLIT_BY_MARK_FILE = "output/log/split_by_mark.txt"
+SPLIT_BY_COMMA_FILE = "output/log/split_by_comma.xlsx"
+SPLIT_BY_CONNECTOR_FILE = "output/log/split_by_connector.xlsx"
+SPLIT_BY_MARK_FILE = "output/log/split_by_mark.xlsx"

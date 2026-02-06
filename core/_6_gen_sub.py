@@ -104,11 +104,6 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
     """Align timestamps and add a new timestamp column to df_translate"""
     df_trans_time = df_translate.copy()
 
-    # Assign an ID to each word in df_text['text'] and create a new DataFrame
-    words = df_text['text'].str.split(expand=True).stack().reset_index(level=1, drop=True).reset_index()
-    words.columns = ['id', 'word']
-    words['id'] = words['id'].astype(int)
-
     # Process timestamps ⏰
     time_stamp_list = get_sentence_timestamps(df_text, df_translate)
     df_trans_time['timestamp'] = time_stamp_list
@@ -128,8 +123,19 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
         df_trans_time['Translation'] = df_trans_time['Translation'].apply(lambda x: re.sub(r'[，。]', ' ', x).strip())
 
     # Output subtitles 📜
+    diarization_enabled = load_key("whisper.diarization", False)
+    
     def generate_subtitle_string(df, columns):
-        return ''.join([f"{i+1}\n{row['timestamp']}\n{row[columns[0]].strip()}\n{row[columns[1]].strip() if len(columns) > 1 else ''}\n\n" for i, row in df.iterrows()]).strip()
+        res = ""
+        for i, row in df.iterrows():
+            lines = []
+            for col in columns:
+                text = str(row[col]).strip()
+                if diarization_enabled and 'speaker_id' in row and row['speaker_id'] is not None:
+                    text = f"[{row['speaker_id']}]: {text}"
+                lines.append(text)
+            res += f"{i+1}\n{row['timestamp']}\n" + "\n".join(lines) + "\n\n"
+        return res.strip()
 
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
@@ -160,8 +166,10 @@ def align_timestamp_main():
     df_translate_for_audio = pd.read_excel(_5_REMERGED) # use remerged file to avoid unmatched lines when dubbing
     df_translate_for_audio['Translation'] = df_translate_for_audio['Translation'].apply(clean_translation)
     
-    align_timestamp(df_text, df_translate_for_audio, AUDIO_SUBTITLE_OUTPUT_CONFIGS, _AUDIO_DIR)
-    console.print(Panel(f"[bold green]🎉📝 Audio subtitles generation completed! Please check in the `{_AUDIO_DIR}` folder 👀[/bold green]"))
+    df_audio = align_timestamp(df_text, df_translate_for_audio, AUDIO_SUBTITLE_OUTPUT_CONFIGS, _AUDIO_DIR)
+    # Save aligned data for TTS processing
+    df_audio.to_excel(_6_ALIGNED_FOR_AUDIO, index=False)
+    console.print(Panel(f"[bold green]🎉📝 Audio subtitles generation completed! Aligned data saved to `{_6_ALIGNED_FOR_AUDIO}`[/bold green]"))
     
 
 if __name__ == '__main__':

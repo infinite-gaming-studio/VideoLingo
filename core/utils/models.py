@@ -3,12 +3,13 @@
 # ------------------------------------------
 
 _2_CLEANED_CHUNKS = "output/log/cleaned_chunks.xlsx"
-_3_1_SPLIT_BY_NLP = "output/log/split_by_nlp.txt"
-_3_2_SPLIT_BY_MEANING = "output/log/split_by_meaning.txt"
+_3_1_SPLIT_BY_NLP = "output/log/split_by_nlp.xlsx"
+_3_2_SPLIT_BY_MEANING = "output/log/split_by_meaning.xlsx"
 _4_1_TERMINOLOGY = "output/log/terminology.json"
 _4_2_TRANSLATION = "output/log/translation_results.xlsx"
 _5_SPLIT_SUB = "output/log/translation_results_for_subtitles.xlsx"
 _5_REMERGED = "output/log/translation_results_remerged.xlsx"
+_6_ALIGNED_FOR_AUDIO = "output/log/audio_aligned.xlsx"
 
 _8_1_AUDIO_TASK = "output/audio/tts_tasks.xlsx"
 
@@ -37,6 +38,7 @@ __all__ = [
     "_4_2_TRANSLATION",
     "_5_SPLIT_SUB",
     "_5_REMERGED",
+    "_6_ALIGNED_FOR_AUDIO",
     "_8_1_AUDIO_TASK",
     "_OUTPUT_DIR",
     "_AUDIO_DIR",

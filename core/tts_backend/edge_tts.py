@@ -12,10 +12,11 @@ import subprocess
 # zh-CN-XiaoxiaoNeural - Female
 # zh-CN-YunxiNeural - Male
 # zh-CN-XiaoyiNeural - Female
-def edge_tts(text, save_path):
+def edge_tts(text, save_path, voice=None):
     # Load settings from config file
-    edge_set = load_key("edge_tts")
-    voice = edge_set.get("voice", "en-US-JennyNeural")
+    if voice is None:
+        edge_set = load_key("edge_tts")
+        voice = edge_set.get("voice", "en-US-JennyNeural")
     
     # Create output directory if it doesn't exist
     speech_file_path = Path(save_path)

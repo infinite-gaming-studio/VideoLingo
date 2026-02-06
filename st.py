@@ -75,9 +75,15 @@ def audio_processing_section():
             4. {t("Merge final audio into video")}
         """, unsafe_allow_html=True)
         if not os.path.exists(DUB_VIDEO):
-            if st.button(t("Start Audio Processing"), key="audio_processing_button"):
-                process_audio()
-                st.rerun()
+            from core.st_utils.speaker_ui import speaker_configuration_ui
+            speaker_configured = speaker_configuration_ui()
+            
+            if speaker_configured:
+                if st.button(t("Start Audio Processing"), key="audio_processing_button"):
+                    process_audio()
+                    st.rerun()
+            else:
+                st.info(t("Please configure speaker voices above before starting audio processing."))
         else:
             st.success(t("Audio processing is complete! You can check the audio files in the `output` folder."))
             if load_key("burn_subtitles"):

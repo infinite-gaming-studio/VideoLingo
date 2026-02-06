@@ -315,7 +315,9 @@ async def transcribe(
     model: str = "large-v3",
     batch_size: Optional[int] = None,
     align: bool = True,
-    speaker_diarization: bool = False
+    speaker_diarization: bool = False,
+    min_speakers: Optional[int] = None,
+    max_speakers: Optional[int] = None
 ):
     """Transcribe audio using WhisperX"""
     start_time = time.time()
@@ -357,7 +359,7 @@ async def transcribe(
         if speaker_diarization:
             vprint("🎭 Speaker diarization...")
             diarize_model = get_or_load_diarize_model()
-            diarize_segments = diarize_model(audio_array)
+            diarize_segments = diarize_model(audio_array, min_speakers=min_speakers, max_speakers=max_speakers)
             result_diarized = whisperx.assign_word_speakers(diarize_segments, {"segments": segments})
             segments = result_diarized.get("segments", [])
             speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in segments if "speaker" in seg))

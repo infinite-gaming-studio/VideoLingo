@@ -24,7 +24,7 @@ def page_setting():
             SIDEBAR_KEYS = [
                 "display_language",
                 "api.key", "api.base_url", "api.model", "api.llm_support_json",
-                "whisper.language", "whisper.runtime", "whisper.elevenlabs_api_key",
+                "whisper.language", "whisper.runtime", "whisper.elevenlabs_api_key", "whisper.diarization",
                 "cloud_native.cloud_url", "cloud_native.token",
                 "target_language", "demucs", "burn_subtitles", "tts_method",
                 "sf_fish_tts.api_key", "sf_fish_tts.mode", "sf_fish_tts.voice",
@@ -180,6 +180,11 @@ def page_setting():
         burn_subtitles = st.toggle(t("Burn-in Subtitles"), value=load_key("burn_subtitles"), help=t("Whether to burn subtitles into the video, will increase processing time"))
         if burn_subtitles != load_key("burn_subtitles"):
             update_key("burn_subtitles", burn_subtitles)
+            st.rerun()
+
+        diarization = st.toggle(t("Speaker Diarization"), value=load_key("whisper.diarization"), help=t("Enable speaker diarization (multi-role detection). Cloud runtime only."))
+        if diarization != load_key("whisper.diarization"):
+            update_key("whisper.diarization", diarization)
             st.rerun()
 
         # Show cloud settings only if cloud runtime is selected

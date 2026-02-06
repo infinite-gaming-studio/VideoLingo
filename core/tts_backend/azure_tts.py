@@ -1,11 +1,12 @@
 import requests
 from core.utils import load_key
 
-def azure_tts(text: str, save_path: str) -> None:
+def azure_tts(text: str, save_path: str, voice: str = None) -> None:
     url = "https://api.302.ai/cognitiveservices/v1"
     
     API_KEY = load_key("azure_tts.api_key")
-    voice = load_key("azure_tts.voice")
+    if voice is None:
+        voice = load_key("azure_tts.voice")
     
     payload = f"""<speak version='1.0' xml:lang='zh-CN'><voice name='{voice}'>{text}</voice></speak>"""
     headers = {

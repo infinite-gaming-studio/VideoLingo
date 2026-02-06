@@ -8,9 +8,10 @@ VOICE_LIST = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
 # voice options: alloy, echo, fable, onyx, nova, and shimmer
 # refer to: https://platform.openai.com/docs/guides/text-to-speech/quickstart
 @except_handler("Failed to generate audio using OpenAI TTS", retry=3, delay=1)
-def openai_tts(text, save_path):
+def openai_tts(text, save_path, voice=None):
     API_KEY = load_key("openai_tts.api_key")
-    voice = load_key("openai_tts.voice")
+    if voice is None:
+        voice = load_key("openai_tts.voice")
     payload = json.dumps({
         "model": "tts-1",
         "input": text,

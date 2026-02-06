@@ -39,6 +39,18 @@ def tts_main(text, save_as, number, task_df):
     print(f"Generating <{text}...>")
     TTS_METHOD = load_key("tts_method")
     
+    # Get speaker-specific voice if enabled
+    speaker_id = task_df.loc[task_df['number'] == number, 'speaker_id'].values[0] if 'speaker_id' in task_df.columns else None
+    
+    # Priority: 1. speaker_mappings.json (from UI) -> 2. speaker_voices (from config)
+    from core.utils.speaker_utils import load_speaker_mappings
+    mappings = load_speaker_mappings()
+    voice = mappings.get(speaker_id)
+    
+    if not voice:
+        speaker_voices = load_key("speaker_voices", {})
+        voice = speaker_voices.get(speaker_id)
+
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -47,17 +59,17 @@ def tts_main(text, save_as, number, task_df):
                 correct_text = ask_gpt(get_correct_text_prompt(text),resp_type="json", log_title='tts_correct_text')
                 text = correct_text['text']
             if TTS_METHOD == 'openai_tts':
-                openai_tts(text, save_as)
+                openai_tts(text, save_as, voice)
             elif TTS_METHOD == 'gpt_sovits':
                 gpt_sovits_tts_for_videolingo(text, save_as, number, task_df)
             elif TTS_METHOD == 'fish_tts':
-                fish_tts(text, save_as)
+                fish_tts(text, save_as, voice)
             elif TTS_METHOD == 'azure_tts':
-                azure_tts(text, save_as)
+                azure_tts(text, save_as, voice)
             elif TTS_METHOD == 'sf_fish_tts':
                 siliconflow_fish_tts_for_videolingo(text, save_as, number, task_df)
             elif TTS_METHOD == 'edge_tts':
-                edge_tts(text, save_as)
+                edge_tts(text, save_as, voice)
             elif TTS_METHOD == 'custom_tts':
                 custom_tts(text, save_as)
             elif TTS_METHOD == 'sf_cosyvoice2':
