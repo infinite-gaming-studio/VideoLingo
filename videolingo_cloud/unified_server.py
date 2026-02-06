@@ -53,6 +53,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
+# ============== Logging ==============
+try:
+    from rich.console import Console
+    _console = Console(log_time=True)
+    def vvprint(*args, **kwargs):
+        _console.log(*args, **kwargs)
+except ImportError:
+    import datetime
+    def vvprint(*args, **kwargs):
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        vprint(f"[{timestamp}]", *args, **kwargs)
+
 # Demucs imports
 try:
     from demucs.pretrained import get_model
@@ -62,7 +74,7 @@ try:
     DEMUC_AVAILABLE = True
 except ImportError:
     DEMUC_AVAILABLE = False
-    print("⚠️ Demucs not available, separation service disabled")
+    vvprint("⚠️ Demucs not available, separation service disabled")
 
 import gc
 
@@ -155,7 +167,7 @@ def get_or_load_whisper_model(model_name: str, language: Optional[str] = None, b
     cache_key = f"{model_name}_{language}_{compute_type}"
     
     if cache_key not in whisper_model_cache:
-        print(f"📥 Loading Whisper model: {model_name} (compute_type: {compute_type})...")
+        vprint(f"📥 Loading Whisper model: {model_name} (compute_type: {compute_type})...")
         vad_options = {"vad_onset": 0.500, "vad_offset": 0.363}
         asr_options = {"temperatures": [0], "initial_prompt": ""}
 
@@ -164,7 +176,7 @@ def get_or_load_whisper_model(model_name: str, language: Optional[str] = None, b
             language=language, vad_options=vad_options, asr_options=asr_options
         )
         whisper_model_cache[cache_key] = model
-        print(f"✅ Whisper model loaded: {model_name} ({compute_type})")
+        vprint(f"✅ Whisper model loaded: {model_name} ({compute_type})")
     
     return whisper_model_cache[cache_key]
 
@@ -174,37 +186,37 @@ def get_or_load_demucs_model():
         return None
 
     if 'htdemucs' not in demucs_model_cache:
-        print(f"📥 Loading Demucs model on {device}...")
+        vprint(f"📥 Loading Demucs model on {device}...")
         model = get_model('htdemucs')
         model.eval()
         model.to(device)
         demucs_model_cache['htdemucs'] = model
-        print(f"✅ Demucs model loaded (device: {device})")
+        vprint(f"✅ Demucs model loaded (device: {device})")
 
     return demucs_model_cache['htdemucs']
 
 def get_or_load_align_model(language_code: str):
     """Load or retrieve cached alignment model"""
     if language_code not in align_model_cache:
-        print(f"📥 Loading alignment model for: {language_code}...")
+        vprint(f"📥 Loading alignment model for: {language_code}...")
         align_model, align_metadata = whisperx.load_align_model(
             language_code=language_code, device=device
         )
         align_model_cache[language_code] = (align_model, align_metadata)
-        print(f"✅ Alignment model loaded: {language_code}")
+        vprint(f"✅ Alignment model loaded: {language_code}")
     return align_model_cache[language_code]
 
 def get_or_load_diarize_model():
     """Load or retrieve cached diarization model"""
     if 'diarize' not in diarize_model_cache:
-        print(f"📥 Loading Diarization model on {device}...")
+        vprint(f"📥 Loading Diarization model on {device}...")
         # Use a dummy variable to avoid re-loading if it fails?
         # For now simple cache
         diarize_model = whisperx.DiarizationPipeline(
             model_name="pyannote/speaker-diarization-3.1", device=device
         )
         diarize_model_cache['diarize'] = diarize_model
-        print(f"✅ Diarization model loaded")
+        vprint(f"✅ Diarization model loaded")
     return diarize_model_cache['diarize']
 
 # ============== Audio Processing ==============
@@ -228,22 +240,22 @@ async def lifespan(app: FastAPI):
     """Initialize on startup"""
     global device, compute_type
     
-    print(f"📌 VideoLingo Unified Cloud Server v{SERVER_VERSION}\n")
+    vprint(f"📌 VideoLingo Unified Cloud Server v{SERVER_VERSION}\n")
     
     device, compute_type = get_device()
     
     if device == "cuda":
         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-        print(f"🚀 Using CUDA GPU: {torch.cuda.get_device_name(0)}")
-        print(f"💾 GPU Memory: {gpu_mem:.2f} GB")
+        vprint(f"🚀 Using CUDA GPU: {torch.cuda.get_device_name(0)}")
+        vprint(f"💾 GPU Memory: {gpu_mem:.2f} GB")
     elif device == "mps":
-        print(f"🍎 Using Apple Silicon MPS")
+        vprint(f"🍎 Using Apple Silicon MPS")
     else:
-        print("💻 Using CPU")
-    print(f"⚙️ Compute type: {compute_type}\n")
+        vprint("💻 Using CPU")
+    vprint(f"⚙️ Compute type: {compute_type}\n")
     
     # Preload models
-    print("📦 Preloading models...")
+    vprint("📦 Preloading models...")
     get_or_load_whisper_model("large-v3")
     if DEMUC_AVAILABLE:
         get_or_load_demucs_model()
@@ -253,20 +265,20 @@ async def lifespan(app: FastAPI):
         get_or_load_align_model("en")
         get_or_load_align_model("zh")
     except Exception as e:
-        print(f"⚠️ Failed to preload some alignment models: {e}")
+        vprint(f"⚠️ Failed to preload some alignment models: {e}")
         
     # Preload diarization
     try:
         get_or_load_diarize_model()
     except Exception as e:
-        print(f"⚠️ Failed to preload diarization model: {e}")
+        vprint(f"⚠️ Failed to preload diarization model: {e}")
         
-    print("✅ All models loaded!\n")
+    vprint("✅ All models loaded!\n")
     
     yield
     
     # Cleanup
-    print("Cleaning up...")
+    vprint("Cleaning up...")
     whisper_model_cache.clear()
     demucs_model_cache.clear()
     if device == "cuda":
@@ -321,7 +333,7 @@ async def transcribe(
         
         whisper_model = get_or_load_whisper_model(model, language, batch_size)
         
-        print("🎯 Transcribing...")
+        vprint("🎯 Transcribing...")
         result = whisper_model.transcribe(audio_array, batch_size=batch_size)
         detected_language = result.get("language", language or "unknown")
         segments = result.get("segments", [])
@@ -329,7 +341,7 @@ async def transcribe(
         # Word alignment
         word_segments = None
         if align and segments:
-            print("🔄 Aligning words...")
+            vprint("🔄 Aligning words...")
             align_model, align_metadata = get_or_load_align_model(detected_language)
             result_aligned = whisperx.align(
                 segments, align_model, align_metadata, audio_array, device,
@@ -341,7 +353,7 @@ async def transcribe(
         # Speaker diarization
         speakers = None
         if speaker_diarization:
-            print("🎭 Speaker diarization...")
+            vprint("🎭 Speaker diarization...")
             diarize_model = get_or_load_diarize_model()
             diarize_segments = diarize_model(audio_array)
             result_diarized = whisperx.assign_word_speakers(diarize_segments, {"segments": segments})
@@ -357,7 +369,7 @@ async def transcribe(
         )
         
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        vprint(f"❌ Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if device == "cuda":
@@ -387,7 +399,7 @@ async def separate_audio(
         try:
             model = get_or_load_demucs_model()
 
-            print("🎵 Separating audio...")
+            vprint("🎵 Separating audio...")
             # Load audio file
             from torchaudio import load as torchaudio_load
             from torchaudio import transforms as T
@@ -396,15 +408,15 @@ async def separate_audio(
 
             # Ensure stereo (2 channels) for demucs
             if wav.shape[0] == 1:
-                print("⚠️ Input is mono, converting to stereo...")
+                vprint("⚠️ Input is mono, converting to stereo...")
                 wav = wav.repeat(2, 1)  # Repeat mono to stereo
             elif wav.shape[0] > 2:
-                print("⚠️ Input has more than 2 channels, using first 2...")
+                vprint("⚠️ Input has more than 2 channels, using first 2...")
                 wav = wav[:2, :]
 
             # Resample to model's expected sample rate if needed
             if sr != model.samplerate:
-                print(f"⚠️ Resampling from {sr}Hz to {model.samplerate}Hz...")
+                vprint(f"⚠️ Resampling from {sr}Hz to {model.samplerate}Hz...")
                 resampler = T.Resample(sr, model.samplerate).to(device)
                 wav = resampler(wav)
 
@@ -476,7 +488,7 @@ async def separate_audio(
                 pass
                 
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        vprint(f"❌ Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============== Main Routes ==============
@@ -543,7 +555,7 @@ if __name__ == "__main__":
     if ngrok_token:
         try:
             from pyngrok import ngrok, conf
-            print(f"🌐 Setting up ngrok tunnel on port {port}...")
+            vprint(f"🌐 Setting up ngrok tunnel on port {port}...")
             conf.get_default().auth_token = ngrok_token
             
             # Kill any existing tunnels
@@ -553,15 +565,15 @@ if __name__ == "__main__":
                 pass
                 
             public_url = ngrok.connect(port).public_url
-            print(f"\n🚀 Server is public at: {public_url}")
-            print("\nTo use this with VideoLingo, update your config.yaml:")
-            print("  whisper:")
-            print("    runtime: cloud")
-            print(f"    whisperX_cloud_url: {public_url}")
-            print("  demucs: cloud\n")
+            vprint(f"\n🚀 Server is public at: {public_url}")
+            vprint("\nTo use this with VideoLingo, update your config.yaml:")
+            vprint("  whisper:")
+            vprint("    runtime: cloud")
+            vprint(f"    whisperX_cloud_url: {public_url}")
+            vprint("  demucs: cloud\n")
         except ImportError:
-            print("⚠️ pyngrok not installed, skipping ngrok tunnel setup.")
+            vprint("⚠️ pyngrok not installed, skipping ngrok tunnel setup.")
         except Exception as e:
-            print(f"❌ Failed to start ngrok tunnel: {e}")
+            vprint(f"❌ Failed to start ngrok tunnel: {e}")
 
     run_server(host=host, port=port)

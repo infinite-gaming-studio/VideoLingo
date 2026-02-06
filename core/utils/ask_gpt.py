@@ -3,9 +3,10 @@ import json
 from threading import Lock
 import json_repair
 from openai import OpenAI
-from core.utils.config_utils import load_key
-from rich import print as rprint
+from core.utils.config_utils import load_key, update_key
+from core.utils.logger import vprint, log_api_call
 from core.utils.decorator import except_handler
+import time
 
 # ------------
 # cache gpt response
@@ -47,7 +48,7 @@ def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default"):
     # check cache
     cached = _load_cache(prompt, resp_type, log_title)
     if cached:
-        rprint("use cache response")
+        vprint("use cache response")
         return cached
 
     model = load_key("api.model")
@@ -67,7 +68,11 @@ def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default"):
         response_format=response_format,
         timeout=300
     )
+    start_time = time.time()
     resp_raw = client.chat.completions.create(**params)
+    duration = time.time() - start_time
+    
+    log_api_call("GPT", model, params, resp_raw.choices[0].message.content, duration)
 
     # process and return full result
     resp_content = resp_raw.choices[0].message.content
@@ -91,4 +96,4 @@ if __name__ == '__main__':
     from rich import print as rprint
     
     result = ask_gpt("""test respond ```json\n{\"code\": 200, \"message\": \"success\"}\n```""", resp_type="json")
-    rprint(f"Test json output result: {result}")
+    vprint(f"Test json output result: {result}")

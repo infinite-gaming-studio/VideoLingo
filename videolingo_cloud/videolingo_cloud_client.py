@@ -18,7 +18,7 @@ from rich import print as rprint
 
 # Try to import VideoLingo utils
 try:
-    from core.utils import load_key
+    from core.utils import load_key, vprint
 except ImportError:
     # Fallback when running standalone
     def load_key(key: str, default=None):
@@ -31,6 +31,10 @@ except ImportError:
             else:
                 return default
         return value
+    
+    def vprint(*args, **kwargs):
+        """Fallback vprint function"""
+        print(*args, **kwargs)
     
     _CONFIG = {}
 
@@ -78,23 +82,23 @@ def check_cloud_connection(url: str = None, timeout: int = 10) -> Dict[str, Any]
             response = requests.get(f"{url}/", timeout=timeout)
             if response.status_code == 200:
                 data = response.json()
-                rprint(f"[green]✅ Cloud WhisperX connected:[/green] {url}")
-                rprint(f"[cyan]Platform:[/cyan] {data.get('platform', 'unknown')}")
-                rprint(f"[cyan]Device:[/cyan] {data.get('device', 'unknown')}")
+                vprint(f"[green]✅ Cloud WhisperX connected:[/green] {url}")
+                vprint(f"[cyan]Platform:[/cyan] {data.get('platform', 'unknown')}")
+                vprint(f"[cyan]Device:[/cyan] {data.get('device', 'unknown')}")
                 if data.get('gpu_memory_gb'):
-                    rprint(f"[cyan]GPU Memory:[/cyan] {data['gpu_memory_gb']:.2f} GB")
+                    vprint(f"[cyan]GPU Memory:[/cyan] {data['gpu_memory_gb']:.2f} GB")
                 return {'available': True, **data}
             else:
                 return {'available': False, 'error': f'Status {response.status_code}'}
         except requests.exceptions.Timeout:
             if attempt < MAX_RETRIES - 1:
-                rprint(f"[yellow]⚠️ Connection timeout, retrying... ({attempt + 1}/{MAX_RETRIES})[/yellow]")
+                vprint(f"[yellow]⚠️ Connection timeout, retrying... ({attempt + 1}/{MAX_RETRIES})[/yellow]")
                 time.sleep(RETRY_DELAY)
             else:
                 return {'available': False, 'error': 'Connection timeout'}
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
-                rprint(f"[yellow]⚠️ Connection error, retrying... ({attempt + 1}/{MAX_RETRIES})[/yellow]")
+                vprint(f"[yellow]⚠️ Connection error, retrying... ({attempt + 1}/{MAX_RETRIES})[/yellow]")
                 time.sleep(RETRY_DELAY)
             else:
                 return {'available': False, 'error': str(e)}
@@ -145,8 +149,8 @@ def transcribe_audio_cloud(
     if not os.path.exists(audio_file):
         raise FileNotFoundError(f"Audio file not found: {audio_file}")
     
-    rprint(f"[green]🚀 Sending to cloud WhisperX:[/green] {url}")
-    rprint(f"[cyan]⏱️ Segment:[/cyan] {start:.2f}s - {end:.2f}s")
+    vprint(f"[green]🚀 Sending to cloud WhisperX:[/green] {url}")
+    vprint(f"[cyan]⏱️ Segment:[/cyan] {start:.2f}s - {end:.2f}s")
     
     # auth headers
     headers = {}
@@ -207,11 +211,11 @@ def transcribe_audio_cloud(
                             if 'end' in word:
                                 word['end'] += start
                 
-                rprint(f"[green]✅ Transcription complete![/green]")
-                rprint(f"[cyan]Language:[/cyan] {result.get('language', 'unknown')}")
-                rprint(f"[cyan]Processing time:[/cyan] {result.get('processing_time', 0):.2f}s")
-                rprint(f"[cyan]Device:[/cyan] {result.get('device', 'unknown')}")
-                rprint(f"[cyan]Platform:[/cyan] {result.get('platform', 'unknown')}")
+                vprint(f"[green]✅ Transcription complete![/green]")
+                vprint(f"[cyan]Language:[/cyan] {result.get('language', 'unknown')}")
+                vprint(f"[cyan]Processing time:[/cyan] {result.get('processing_time', 0):.2f}s")
+                vprint(f"[cyan]Device:[/cyan] {result.get('device', 'unknown')}")
+                vprint(f"[cyan]Platform:[/cyan] {result.get('platform', 'unknown')}")
                 
                 return {
                     'language': result.get('language', 'en'),
@@ -220,17 +224,17 @@ def transcribe_audio_cloud(
                 
         except requests.exceptions.Timeout:
             last_error = f"Cloud API timeout after {timeout}s"
-            rprint(f"[yellow]⚠️ Attempt {attempt + 1}/{MAX_RETRIES} timed out[/yellow]")
+            vprint(f"[yellow]⚠️ Attempt {attempt + 1}/{MAX_RETRIES} timed out[/yellow]")
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY)
         except requests.exceptions.ConnectionError:
             last_error = f"Cannot connect to cloud API at {url}"
-            rprint(f"[yellow]⚠️ Attempt {attempt + 1}/{MAX_RETRIES} connection failed[/yellow]")
+            vprint(f"[yellow]⚠️ Attempt {attempt + 1}/{MAX_RETRIES} connection failed[/yellow]")
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY)
         except Exception as e:
             last_error = str(e)
-            rprint(f"[yellow]⚠️ Attempt {attempt + 1}/{MAX_RETRIES} failed: {last_error}[/yellow]")
+            vprint(f"[yellow]⚠️ Attempt {attempt + 1}/{MAX_RETRIES} failed: {last_error}[/yellow]")
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAY)
     
@@ -439,7 +443,7 @@ def separate_audio_cloud(
     if token:
         headers['Authorization'] = f"Bearer {token}"
         
-    rprint(f"[green]🚀 Sending to cloud Demucs:[/green] {url}")
+    vprint(f"[green]🚀 Sending to cloud Demucs:[/green] {url}")
     
     with open(audio_file, 'rb') as f:
         files = {'audio': (os.path.basename(audio_file), f, 'audio/wav')}
@@ -465,13 +469,13 @@ def separate_audio_cloud(
             os.makedirs(os.path.dirname(vocals_output) or '.', exist_ok=True)
             with open(vocals_output, 'wb') as f:
                 f.write(base64.b64decode(result['vocals_base64']))
-            rprint(f"[green]✅ Vocals saved[/green]")
+            vprint(f"[green]✅ Vocals saved[/green]")
             
         if result.get('background_base64'):
             os.makedirs(os.path.dirname(background_output) or '.', exist_ok=True)
             with open(background_output, 'wb') as f:
                 f.write(base64.b64decode(result['background_base64']))
-            rprint(f"[green]✅ Background saved[/green]")
+            vprint(f"[green]✅ Background saved[/green]")
 
 
 def get_server_info(url: str = None) -> Dict[str, Any]:

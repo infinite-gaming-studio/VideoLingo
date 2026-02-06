@@ -27,6 +27,18 @@ from demucs.api import Separator
 from demucs.apply import BagOfModels
 import gc
 
+# ============== Logging ==============
+try:
+    from rich.console import Console
+    _console = Console(log_time=True)
+    def vvprint(*args, **kwargs):
+        _console.log(*args, **kwargs)
+except ImportError:
+    import datetime
+    def vvprint(*args, **kwargs):
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        vprint(f"[{timestamp}]", *args, **kwargs)
+
 warnings.filterwarnings("ignore")
 
 # Global model cache
@@ -55,10 +67,10 @@ def get_or_load_model():
     global model_cache
     
     if 'htdemucs' not in model_cache:
-        print("📥 Loading Demucs htdemucs model...")
+        vprint("📥 Loading Demucs htdemucs model...")
         model = get_model('htdemucs')
         model_cache['htdemucs'] = model
-        print("✅ Demucs model loaded")
+        vprint("✅ Demucs model loaded")
     
     return model_cache['htdemucs']
 
@@ -86,19 +98,19 @@ async def lifespan(app: FastAPI):
     global device
 
     # Print server version on startup
-    print(f"📌 Demucs Cloud Server v{SERVER_VERSION}\n")
+    vprint(f"📌 Demucs Cloud Server v{SERVER_VERSION}\n")
 
     # Detect device
     device = get_device()
     
     if device == "cuda":
         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-        print(f"🚀 Using CUDA GPU: {torch.cuda.get_device_name(0)}")
-        print(f"💾 GPU Memory: {gpu_mem:.2f} GB")
+        vprint(f"🚀 Using CUDA GPU: {torch.cuda.get_device_name(0)}")
+        vprint(f"💾 GPU Memory: {gpu_mem:.2f} GB")
     elif device == "mps":
-        print(f"🍎 Using Apple Silicon MPS")
+        vprint(f"🍎 Using Apple Silicon MPS")
     else:
-        print("💻 Using CPU (no GPU detected)")
+        vprint("💻 Using CPU (no GPU detected)")
 
     # Preload model
     get_or_load_model()
@@ -106,7 +118,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cleanup
-    print("Cleaning up models...")
+    vprint("Cleaning up models...")
     model_cache.clear()
     if device == "cuda":
         torch.cuda.empty_cache()
@@ -184,7 +196,7 @@ async def separate_audio(
             separator = PreloadedSeparator(model=model, shifts=1, overlap=0.25)
             
             # Separate audio
-            print("🎵 Separating audio...")
+            vprint("🎵 Separating audio...")
             _, outputs = separator.separate_audio_file(input_path)
             
             # Prepare kwargs for saving
@@ -249,7 +261,7 @@ async def separate_audio(
                 pass
                 
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        vprint(f"❌ Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/separate/url")
@@ -285,7 +297,7 @@ async def separate_audio_url(
             separator = PreloadedSeparator(model=model, shifts=1, overlap=0.25)
             
             # Separate audio
-            print(f"🎵 Separating audio from URL...")
+            vprint(f"🎵 Separating audio from URL...")
             _, outputs = separator.separate_audio_file(input_path)
             
             # Prepare kwargs for saving
@@ -351,7 +363,7 @@ async def separate_audio_url(
                 pass
                 
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        vprint(f"❌ Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/cache")

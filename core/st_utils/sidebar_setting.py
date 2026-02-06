@@ -127,6 +127,11 @@ def page_setting():
         if llm_support_json != load_key("api.llm_support_json"):
             update_key("api.llm_support_json", llm_support_json)
             st.rerun()
+            
+        debug_mode = st.toggle(t("Debug Mode"), value=load_key("debug"), help=t("Enable detailed logging for debugging"))
+        if debug_mode != load_key("debug"):
+            update_key("debug", debug_mode)
+            st.rerun()
     with st.expander(t("Subtitles Settings"), expanded=True):
         c1, c2 = st.columns(2)
         with c1:

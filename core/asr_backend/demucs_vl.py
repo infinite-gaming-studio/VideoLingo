@@ -18,6 +18,7 @@ from rich.console import Console
 from rich import print as rprint
 from typing import Optional
 from core.utils.models import *
+from core.utils import vprint
 
 console = Console()
 
@@ -102,20 +103,20 @@ def separate_audio_local():
             self.update_parameter(device=device, shifts=shifts, overlap=overlap, split=split,
                                 segment=segment, jobs=jobs, progress=True, callback=None, callback_arg=None)
     
-    console.print("🤖 Loading <htdemucs> model...")
+    vprint("🤖 Loading <htdemucs> model...")
     model = get_model('htdemucs')
     separator = PreloadedSeparator(model=model, shifts=1, overlap=0.25)
     
-    console.print("🎵 Separating audio...")
+    vprint("🎵 Separating audio...")
     _, outputs = separator.separate_audio_file(_RAW_AUDIO_FILE)
     
     kwargs = {"samplerate": model.samplerate, "bitrate": 128, "preset": 2, 
              "clip": "rescale", "as_float": False, "bits_per_sample": 16}
     
-    console.print("🎤 Saving vocals track...")
+    vprint("🎤 Saving vocals track...")
     save_audio(outputs['vocals'].cpu(), _VOCAL_AUDIO_FILE, **kwargs)
     
-    console.print("🎹 Saving background music...")
+    vprint("🎹 Saving background music...")
     background = sum(audio for source, audio in outputs.items() if source != 'vocals')
     save_audio(background.cpu(), _BACKGROUND_AUDIO_FILE, **kwargs)
     
@@ -148,8 +149,8 @@ def separate_audio_cloud(cloud_url: str = None):
         import base64
         from core.utils import load_key
         
-        console.print(f"🚀 Using cloud Demucs (fallback): {url}")
-        console.print("🎵 Sending audio for separation...")
+        vprint(f"🚀 Using cloud Demucs (fallback): {url}")
+        vprint("🎵 Sending audio for separation...")
         
         # Get token from cloud_native or legacy key
         token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
@@ -191,14 +192,14 @@ def separate_audio_cloud(cloud_url: str = None):
                 os.makedirs(os.path.dirname(_VOCAL_AUDIO_FILE) or '.', exist_ok=True)
                 with open(_VOCAL_AUDIO_FILE, 'wb') as f:
                     f.write(base64.b64decode(vocals_b64))
-                console.print(f"[green]✅ Vocals saved[/green]")
+                vprint(f"[green]✅ Vocals saved[/green]")
             
             background_b64 = result.get('background_base64')
             if background_b64:
                 os.makedirs(os.path.dirname(_BACKGROUND_AUDIO_FILE) or '.', exist_ok=True)
                 with open(_BACKGROUND_AUDIO_FILE, 'wb') as f:
                     f.write(base64.b64decode(background_b64))
-                console.print(f"[green]✅ Background saved[/green]")
+                vprint(f"[green]✅ Background saved[/green]")
 
 def demucs_audio():
     """
@@ -206,7 +207,7 @@ def demucs_audio():
     Automatically chooses between local and cloud processing based on configuration
     """
     if os.path.exists(_VOCAL_AUDIO_FILE) and os.path.exists(_BACKGROUND_AUDIO_FILE):
-        rprint(f"[yellow]⚠️ {_VOCAL_AUDIO_FILE} and {_BACKGROUND_AUDIO_FILE} already exist, skip Demucs processing.[/yellow]")
+        vprint(f"[yellow]⚠️ {_VOCAL_AUDIO_FILE} and {_BACKGROUND_AUDIO_FILE} already exist, skip Demucs processing.[/yellow]")
         return
     
     os.makedirs(_AUDIO_DIR, exist_ok=True)
@@ -231,9 +232,9 @@ def demucs_audio():
             )
         
         try:
-            console.print("[cyan]☁️ Cloud Native Mode: Using remote Demucs service...[/cyan]")
+            vprint("[cyan]☁️ Cloud Native Mode: Using remote Demucs service...[/cyan]")
             separate_audio_cloud(cloud_url)
-            console.print("[green]✨ Audio separation completed (cloud native)![/green]")
+            vprint("[green]✨ Audio separation completed (cloud native)![/green]")
             return
         except Exception as e:
             raise RuntimeError(
@@ -246,23 +247,23 @@ def demucs_audio():
         # Use cloud processing
         try:
             separate_audio_cloud(cloud_url)
-            console.print("[green]✨ Audio separation completed (cloud)![/green]")
+            vprint("[green]✨ Audio separation completed (cloud)![/green]")
             return
         except Exception as e:
-            rprint(f"[yellow]⚠️ Cloud processing failed: {e}[/yellow]")
-            rprint("[yellow]Falling back to local processing...[/yellow]")
+            vprint(f"[yellow]⚠️ Cloud processing failed: {e}[/yellow]")
+            vprint("[yellow]Falling back to local processing...[/yellow]")
     
     # Use local processing
     try:
         separate_audio_local()
-        console.print("[green]✨ Audio separation completed (local)![/green]")
+        vprint("[green]✨ Audio separation completed (local)![/green]")
     except ImportError as e:
-        rprint(f"[red]❌ {e}[/red]")
-        rprint("[yellow]To use cloud Demucs:[/yellow]")
-        rprint(" 1. Deploy unified server using videolingo_cloud/Unified_Cloud_Server.ipynb")
-        rprint(" 2. Set whisper.whisperX_cloud_url in config.yaml")
-        rprint("[yellow]Or install demucs locally:[/yellow]")
-        rprint(" pip install demucs")
+        vprint(f"[red]❌ {e}[/red]")
+        vprint("[yellow]To use cloud Demucs:[/yellow]")
+        vprint(" 1. Deploy unified server using videolingo_cloud/Unified_Cloud_Server.ipynb")
+        vprint(" 2. Set whisper.whisperX_cloud_url in config.yaml")
+        vprint("[yellow]Or install demucs locally:[/yellow]")
+        vprint(" pip install demucs")
         raise
 
 if __name__ == "__main__":
