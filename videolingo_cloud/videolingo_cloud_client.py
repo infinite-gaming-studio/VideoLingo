@@ -48,7 +48,12 @@ def get_cloud_url() -> str:
         return url.rstrip('/')
     
     try:
-        url = load_key("whisper.whisperX_cloud_url", "")
+        # Check cloud_native first (new unified key)
+        url = load_key("cloud_native.cloud_url", "")
+        if not url:
+            # Fallback to legacy key
+            url = load_key("whisper.whisperX_cloud_url", "")
+        
         if url:
             return url.rstrip('/')
     except:
@@ -149,7 +154,11 @@ def transcribe_audio_cloud(
         token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
         if not token:
             try:
-                token = load_key("whisper.whisperX_token", "")
+                # Check cloud_native first
+                token = load_key("cloud_native.token", "")
+                if not token:
+                    # Fallback to legacy key
+                    token = load_key("whisper.whisperX_token", "")
             except:
                 pass
     if token:
@@ -244,10 +253,14 @@ class VideoLingoCloudClient:
         
         # Get token from argument, env var, or config
         if not token:
-            token = os.getenv("WHISPERX_CLOUD_TOKEN")
+            token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
             if not token:
                 try:
-                    token = load_key("whisper.whisperX_token", "")
+                    # Check cloud_native first
+                    token = load_key("cloud_native.token", "")
+                    if not token:
+                        # Fallback to legacy key
+                        token = load_key("whisper.whisperX_token", "")
                 except:
                     pass
         
@@ -312,6 +325,33 @@ class VideoLingoCloudClient:
         response.raise_for_status()
         return response.json()
     
+    def separate_audio(
+        self,
+        audio_path: str,
+        return_files: bool = True,
+        timeout: int = DEFAULT_TIMEOUT
+    ) -> Dict[str, Any]:
+        """
+        Separate audio into vocals and background
+        
+        Args:
+            audio_path: Path to audio file
+            return_files: If True, return base64-encoded audio files
+            timeout: Request timeout in seconds
+        """
+        with open(audio_path, 'rb') as f:
+            files = {'audio': (os.path.basename(audio_path), f, 'audio/wav')}
+            data = {'return_files': str(return_files).lower()}
+            
+            response = self.session.post(
+                f"{self.base_url}/separation/separate",
+                files=files,
+                data=data,
+                timeout=timeout
+            )
+            response.raise_for_status()
+            return response.json()
+    
     def is_available(self) -> bool:
         """Check if server is available"""
         try:
@@ -367,6 +407,71 @@ def transcribe_audio_cloud_compatible(
         model=model,
         token=token
     )
+
+
+def separate_audio_cloud(
+    audio_file: str,
+    vocals_output: str,
+    background_output: str,
+    cloud_url: str = None,
+    token: str = None
+):
+    """
+    Cloud Demucs processing compatible with VideoLingo
+    """
+    import base64
+    
+    url = cloud_url or get_cloud_url()
+    if not url:
+        raise ValueError("Cloud URL not configured")
+        
+    # auth headers
+    headers = {}
+    if not token:
+        token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
+        if not token:
+            try:
+                token = load_key("cloud_native.token", "")
+                if not token:
+                    token = load_key("whisper.whisperX_token", "")
+            except:
+                pass
+    if token:
+        headers['Authorization'] = f"Bearer {token}"
+        
+    rprint(f"[green]🚀 Sending to cloud Demucs:[/green] {url}")
+    
+    with open(audio_file, 'rb') as f:
+        files = {'audio': (os.path.basename(audio_file), f, 'audio/wav')}
+        data = {'return_files': 'true'}
+        
+        response = requests.post(
+            f"{url}/separation/separate",
+            files=files,
+            data=data,
+            timeout=300,
+            headers=headers
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"API Error {response.status_code}: {response.text}")
+        
+        result = response.json()
+        if not result.get('success'):
+            raise Exception(f"Separation failed: {result}")
+            
+        # Decode and save
+        if result.get('vocals_base64'):
+            os.makedirs(os.path.dirname(vocals_output) or '.', exist_ok=True)
+            with open(vocals_output, 'wb') as f:
+                f.write(base64.b64decode(result['vocals_base64']))
+            rprint(f"[green]✅ Vocals saved[/green]")
+            
+        if result.get('background_base64'):
+            os.makedirs(os.path.dirname(background_output) or '.', exist_ok=True)
+            with open(background_output, 'wb') as f:
+                f.write(base64.b64decode(result['background_base64']))
+            rprint(f"[green]✅ Background saved[/green]")
 
 
 def get_server_info(url: str = None) -> Dict[str, Any]:

@@ -146,10 +146,25 @@ def separate_audio_cloud(cloud_url: str = None):
         # Fallback: inline implementation
         import requests
         import base64
+        from core.utils import load_key
         
-        console.print(f"🚀 Using cloud Demucs: {url}")
+        console.print(f"🚀 Using cloud Demucs (fallback): {url}")
         console.print("🎵 Sending audio for separation...")
         
+        # Get token from cloud_native or legacy key
+        token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
+        if not token:
+            try:
+                token = load_key("cloud_native.token", "")
+                if not token:
+                    token = load_key("whisper.whisperX_token", "")
+            except:
+                pass
+        
+        headers = {}
+        if token:
+            headers['Authorization'] = f"Bearer {token}"
+            
         with open(_RAW_AUDIO_FILE, 'rb') as f:
             files = {'audio': (os.path.basename(_RAW_AUDIO_FILE), f, 'audio/wav')}
             data = {'return_files': 'true'}
@@ -158,7 +173,8 @@ def separate_audio_cloud(cloud_url: str = None):
                 f"{url}/separation/separate",
                 files=files,
                 data=data,
-                timeout=300
+                timeout=300,
+                headers=headers
             )
             
             if response.status_code != 200:
