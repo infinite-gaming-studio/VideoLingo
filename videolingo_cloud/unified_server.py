@@ -74,7 +74,7 @@ try:
     DEMUC_AVAILABLE = True
 except ImportError:
     DEMUC_AVAILABLE = False
-    vvprint("⚠️ Demucs not available, separation service disabled")
+    vprint("⚠️ Demucs not available, separation service disabled")
 
 import gc
 
