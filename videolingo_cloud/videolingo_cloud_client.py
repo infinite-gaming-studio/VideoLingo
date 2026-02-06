@@ -201,6 +201,7 @@ def transcribe_audio_cloud(
                     'max_speakers': max_speakers if max_speakers is not None else ''
                 }
                 
+                vprint(f"[blue]📤 Request Data:[/blue] {data}")
                 # Make request
                 response = requests.post(
                     f"{url}/asr/transcribe",
@@ -215,6 +216,9 @@ def transcribe_audio_cloud(
                     raise Exception(f"API Error {response.status_code}: {error_msg}")
                 
                 result = response.json()
+                vprint(f"[blue]📥 Raw Response Results (keys):[/blue] {list(result.keys())}")
+                if 'segments' in result:
+                    vprint(f"[blue]🔍 First segment speaker:[/blue] {result['segments'][0].get('speaker') if result['segments'] else 'N/A'}")
                 
                 if not result.get('success'):
                     raise Exception(f"Transcription failed: {result}")

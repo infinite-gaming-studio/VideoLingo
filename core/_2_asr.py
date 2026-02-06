@@ -87,9 +87,10 @@ def transcribe():
     # 4. Transcribe audio by clips
     all_results = []
     runtime = load_key("whisper.runtime")
+    diarization_enabled = load_key("whisper.diarization")
+    rprint(f"[cyan]ℹ️ ASR Runtime: {runtime} | Diarization Enabled: {diarization_enabled}[/cyan]")
     
     # In Cloud Native Mode, force using whisperX_asr which supports cloud
-    # Also support legacy runtime="cloud" for backward compatibility
     if is_cloud_native() or runtime == "cloud":
         from core.asr_backend.whisperX_asr import transcribe_audio as ts
         rprint("[cyan]☁️ Transcribing audio with Cloud Native ASR...[/cyan]")
@@ -109,6 +110,10 @@ def transcribe():
         combined_result['segments'].extend(result['segments'])
 
     # 6. Process df (local - lightweight)
+    # Debug: Check for speaker info in combined_result
+    speakers_found = list(set(s.get('speaker') for s in combined_result['segments'] if 'speaker' in s))
+    rprint(f"[blue]🔍 Combined Results Speakers:[/blue] {speakers_found if speakers_found else 'None found'}")
+    
     df = process_transcription(combined_result)
     save_results(df)
     
