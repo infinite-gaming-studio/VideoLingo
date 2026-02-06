@@ -8,7 +8,10 @@ FROM videolingo:base
 WORKDIR /app
 
 # 清空并克隆项目代码 / Clean and clone project code
-RUN rm -rf ./* && git clone https://github.com/infinite-gaming-studio/VideoLingo.git .
+# 清空并克隆项目代码 / Clean and clone project code
+# RUN rm -rf ./* && git clone https://github.com/infinite-gaming-studio/VideoLingo.git .
+# 复制本地代码 / Copy local code
+COPY . .
 
 # 环境变量配置 / Environment variables
 ENV ANTHROPIC_API_KEY="" 
