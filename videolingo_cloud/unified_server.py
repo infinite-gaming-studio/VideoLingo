@@ -555,7 +555,10 @@ if __name__ == "__main__":
     if ngrok_token:
         try:
             from pyngrok import ngrok, conf
-            vprint(f"🌐 Setting up ngrok tunnel on port {port}...")
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{timestamp}] 🌐 Setting up ngrok tunnel on port {port}...", flush=True)
+            
             conf.get_default().auth_token = ngrok_token
             
             # Kill any existing tunnels
@@ -563,17 +566,18 @@ if __name__ == "__main__":
                 ngrok.kill()
             except:
                 pass
-                
+            
             public_url = ngrok.connect(port).public_url
-            vprint(f"\n🚀 Server is public at: {public_url}")
-            vprint("\nTo use this with VideoLingo, update your config.yaml:")
-            vprint("  whisper:")
-            vprint("    runtime: cloud")
-            vprint(f"    whisperX_cloud_url: {public_url}")
-            vprint("  demucs: cloud\n")
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{timestamp}] \n🚀 Server is public at: {public_url}", flush=True)
+            print(f"[{timestamp}] \nTo use this with VideoLingo, update your config.yaml:", flush=True)
+            print(f"[{timestamp}]   whisper:", flush=True)
+            print(f"[{timestamp}]     runtime: cloud", flush=True)
+            print(f"[{timestamp}]     whisperX_cloud_url: {public_url}", flush=True)
+            print(f"[{timestamp}]   demucs: cloud\n", flush=True)
         except ImportError:
-            vprint("⚠️ pyngrok not installed, skipping ngrok tunnel setup.")
+            print("⚠️ pyngrok not installed, skipping ngrok tunnel setup.", flush=True)
         except Exception as e:
-            vprint(f"❌ Failed to start ngrok tunnel: {e}")
+            print(f"❌ Failed to start ngrok tunnel: {e}", flush=True)
 
     run_server(host=host, port=port)
