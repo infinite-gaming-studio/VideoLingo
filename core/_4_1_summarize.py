@@ -8,10 +8,8 @@ CUSTOM_TERMS_PATH = 'custom_terms.xlsx'
 
 def combine_chunks():
     """Combine the text chunks identified by whisper into a single long text"""
-    with open(_3_2_SPLIT_BY_MEANING, 'r', encoding='utf-8') as file:
-        sentences = file.readlines()
-    cleaned_sentences = [line.strip() for line in sentences]
-    combined_text = ' '.join(cleaned_sentences)
+    df = pd.read_excel(_3_2_SPLIT_BY_MEANING)
+    combined_text = ' '.join(df['text'].astype(str).tolist())
     return combined_text[:load_key('summary_length')]  #! Return only the first x characters
 
 def search_things_to_note_in_prompt(sentence):
