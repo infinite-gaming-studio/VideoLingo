@@ -450,3 +450,30 @@ Clean the given text by:
 
 Note: Start you answer with ```json and end with ```, do not add any other text.
 '''.strip()
+
+def get_speaker_profile_prompt(speaker_id, text, tts_method):
+    return f"""
+## Role
+You are a voice assignment expert for video dubbing. Your task is to analyze a speaker's dialogue and recommend the most suitable TTS voice.
+
+## Task
+Based on the provided dialogue, determine the speaker's likely:
+1. Gender (Male/Female)
+2. Tone (e.g., Professional, Excited, Calm, Authoritative)
+3. Age Group (e.g., Young, Adult, Senior)
+
+Then, recommend a specific voice for the TTS method: **{tts_method}**.
+
+## Dialogue Sample from {speaker_id}
+{text}
+
+## Output in only JSON format
+```json
+{{
+    "gender": "Male/Female",
+    "tone": "Brief description",
+    "age": "Brief description",
+    "recommended_voice": "Specific voice name (e.g., for edge_tts use 'en-US-JennyNeural' style)"
+}}
+```
+""".strip()
