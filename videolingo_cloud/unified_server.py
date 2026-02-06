@@ -206,7 +206,7 @@ def get_or_load_diarize_model():
         vprint(f"📥 Loading Diarization model on {device}...")
         # Use a dummy variable to avoid re-loading if it fails?
         # For now simple cache
-        diarize_model = whisperx.DiarizationPipeline(
+        diarize_model = whisperx.diarize.DiarizationPipeline(
             model_name="pyannote/speaker-diarization-3.1", device=device
         )
         diarize_model_cache['diarize'] = diarize_model
