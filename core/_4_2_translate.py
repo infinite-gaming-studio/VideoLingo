@@ -59,7 +59,10 @@ def translate_all():
         theme_prompt = json.load(file).get('theme')
 
     # 🔄 Use concurrent execution for translation
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
+    # Create a fresh console for the progress bar to avoid "Only one live display" error
+    # triggered by potential conflicts with global console instances in Streamlit environment.
+    progress_console = Console()
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True, console=progress_console) as progress:
         task = progress.add_task("[cyan]Translating chunks...", total=len(chunks))
         with concurrent.futures.ThreadPoolExecutor(max_workers=load_key("max_workers")) as executor:
             futures = []
