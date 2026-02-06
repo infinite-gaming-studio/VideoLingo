@@ -224,21 +224,32 @@ def get_or_load_diarize_model():
     """Load or retrieve cached diarization model"""
     if 'diarize' not in diarize_model_cache:
         vprint(f"📥 Loading Diarization model on {device}...")
-        
+
         hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
-        
+
+        vprint(f"   🔑 HF_TOKEN present: {'Yes' if hf_token else 'No (WARNING: token required for diarization)'}")
+        if hf_token:
+            vprint(f"   🔑 Token prefix: {hf_token[:10]}...")
+
         try:
+            vprint(f"   ⏳ Loading pyannote/speaker-diarization-3.1...")
             diarize_model = whisperx.diarize.DiarizationPipeline(
                 model_name="pyannote/speaker-diarization-3.1",
                 device=device,
                 use_auth_token=hf_token
             )
             diarize_model_cache['diarize'] = diarize_model
-            vprint(f"✅ Diarization model loaded")
+            vprint(f"   ✅ Diarization model loaded successfully")
         except AttributeError as e:
             if "NoneType" in str(e) and "to" in str(e):
+                 vprint(f"   ❌ Failed to load: HF_TOKEN invalid or missing")
                  raise ValueError("Failed to load pyannote pipeline. Please check your HF_TOKEN and model permissions.") from e
             raise e
+        except Exception as e:
+            vprint(f"   ❌ Failed to load diarization model: {str(e)}")
+            raise e
+    else:
+        vprint(f"   ♻️ Using cached diarization model")
     return diarize_model_cache['diarize']
 
 def process_audio(audio_bytes: bytes):
@@ -297,11 +308,24 @@ async def transcribe(
 ):
     """
     Transcribe audio file using WhisperX
-    
+
     Returns word-level timestamps compatible with VideoLingo format
     """
     start_time = time.time()
-    
+
+    # 📝 Print input parameters
+    vprint("=" * 60)
+    vprint("📥 NEW TRANSCRIBE REQUEST")
+    vprint("=" * 60)
+    vprint(f"   🎵 Audio file: {audio.filename}")
+    vprint(f"   🌐 Language: {language or 'auto-detect'}")
+    vprint(f"   🤖 Model: {model}")
+    vprint(f"   🎯 Align: {align}")
+    vprint(f"   🎭 Speaker Diarization: {speaker_diarization}")
+    if speaker_diarization:
+        vprint(f"   👥 Min speakers: {min_speakers}, Max speakers: {max_speakers}")
+    vprint("-" * 60)
+
     # Determine batch size based on device
     if batch_size is None:
         if device == "cuda":
@@ -311,20 +335,26 @@ async def transcribe(
             batch_size = 4  # MPS建议使用较小的batch_size
         else:
             batch_size = 1  # CPU模式使用最小batch_size
-    
+    vprint(f"   ⚙️ Batch size: {batch_size}")
+
     try:
         # Read audio file
         audio_bytes = await audio.read()
+        vprint(f"   📦 Audio size: {len(audio_bytes) / 1024 / 1024:.2f} MB")
+
         audio_array = process_audio(audio_bytes)
-        
+        vprint(f"   🎚️ Audio duration: {len(audio_array) / 16000:.2f} seconds")
+
         # Load model
         whisper_model = get_or_load_model(model, language, batch_size)
-        
+
         # Transcribe
         vprint("🎯 Starting transcription...")
         result = whisper_model.transcribe(audio_array, batch_size=batch_size)
         detected_language = result.get("language", language or "unknown")
         segments = result.get("segments", [])
+        vprint(f"   ✅ Transcription complete: {len(segments)} segments")
+        vprint(f"   🌍 Detected language: {detected_language}")
         
         # Word-level alignment
         word_segments = None
@@ -341,18 +371,51 @@ async def transcribe(
             )
             segments = result_aligned.get("segments", [])
             word_segments = result_aligned.get("word_segments", [])
-        
+            vprint(f"   ✅ Alignment complete: {len(word_segments)} word segments")
+
         # Speaker diarization
         speakers = None
         if speaker_diarization:
             vprint("🎭 Performing speaker diarization...")
-            diarize_model = get_or_load_diarize_model()
-            diarize_segments = diarize_model(audio_array, min_speakers=min_speakers, max_speakers=max_speakers)
-            result_diarized = whisperx.assign_word_speakers(diarize_segments, {"segments": segments})
-            segments = result_diarized.get("segments", [])
-            speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in segments if "speaker" in seg))
-        
+            try:
+                diarize_model = get_or_load_diarize_model()
+                diarize_segments = diarize_model(audio_array, min_speakers=min_speakers, max_speakers=max_speakers)
+                vprint(f"   ✅ Diarization complete: {len(diarize_segments)} speaker segments")
+                vprint(f"   📊 Sample diarize segments (first 3):")
+                for i, seg in enumerate(diarize_segments[:3]):
+                    vprint(f"      [{i}] {seg.get('start', 0):.2f}s - {seg.get('end', 0):.2f}s | Speaker: {seg.get('speaker', 'N/A')}")
+
+                vprint("   🔗 Assigning speakers to word segments...")
+                result_diarized = whisperx.assign_word_speakers(diarize_segments, {"segments": segments})
+                segments = result_diarized.get("segments", [])
+
+                # Debug: Check first few segments for speaker
+                vprint("   📋 Sample segments after assignment (first 5):")
+                for i, seg in enumerate(segments[:5]):
+                    speaker = seg.get('speaker', 'NOT_SET')
+                    text_preview = seg.get('text', '')[:30] + '...' if len(seg.get('text', '')) > 30 else seg.get('text', '')
+                    vprint(f"      [{i}] {seg.get('start', 0):.2f}s - {seg.get('end', 0):.2f}s | Speaker: {speaker} | Text: {text_preview}")
+
+                speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in segments if "speaker" in seg and seg.get("speaker")))
+                vprint(f"   👥 Unique speakers found: {speakers}")
+            except Exception as e:
+                vprint(f"   ❌ Diarization failed: {str(e)}")
+                import traceback
+                vprint(f"   📄 Traceback: {traceback.format_exc()}")
+
         processing_time = time.time() - start_time
+
+        # 📝 Print response summary
+        vprint("-" * 60)
+        vprint("📤 RESPONSE SUMMARY")
+        vprint("-" * 60)
+        vprint(f"   ✅ Success: True")
+        vprint(f"   🌍 Language: {detected_language}")
+        vprint(f"   📊 Total segments: {len(segments)}")
+        vprint(f"   🔤 Word segments: {len(word_segments) if word_segments else 0}")
+        vprint(f"   👥 Speakers: {speakers if speakers else 'N/A (diarization disabled)'}")
+        vprint(f"   ⏱️ Processing time: {processing_time:.2f}s")
+        vprint("=" * 60)
 
         return TranscriptionResponse(
             success=True,
@@ -365,9 +428,11 @@ async def transcribe(
             model=model,
             server_version=SERVER_VERSION
         )
-        
+
     except Exception as e:
         vprint(f"❌ Error: {str(e)}")
+        import traceback
+        vprint(f"📄 Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if device == "cuda":

@@ -118,24 +118,24 @@ def transcribe_audio_cloud(
 ) -> Dict[str, Any]:
     """Transcribe audio using cloud ASR service"""
     url = cloud_url or get_cloud_url()
-    
+
     if not url:
         raise ValueError("No cloud URL configured")
-    
+
     audio_file = vocal_audio_file if os.path.exists(vocal_audio_file) else raw_audio_file
-    
+
     if not os.path.exists(audio_file):
         raise FileNotFoundError(f"Audio file not found: {audio_file}")
-    
+
     rprint(f"[cyan]⏱️ Segment:[/cyan] {start:.2f}s - {end:.2f}s")
-    
+
     # auth headers
     headers = {}
     if not token:
         token = get_cloud_token()
     if token:
         headers['Authorization'] = f"Bearer {token}"
-    
+
     last_error = None
     for attempt in range(MAX_RETRIES):
         try:
@@ -151,7 +151,11 @@ def transcribe_audio_cloud(
                     data['min_speakers'] = min_speakers
                 if max_speakers not in [None, '', 0]:
                     data['max_speakers'] = max_speakers
-                
+
+                # 📝 Print request details
+                rprint(f"[dim]📤 Request to: {url}/asr/transcribe[/dim]")
+                rprint(f"[dim]   Params: {data}[/dim]")
+
                 response = requests.post(
                     f"{url}/asr/transcribe",
                     files=files,
@@ -159,16 +163,21 @@ def transcribe_audio_cloud(
                     timeout=timeout,
                     headers=headers
                 )
-                
+
                 if response.status_code != 200:
                     error_msg = response.text
                     raise Exception(f"API Error {response.status_code}: {error_msg}")
-                
+
                 result = response.json()
-                
+
                 if not result.get('success'):
                     raise Exception(f"Transcription failed: {result}")
-                
+
+                # 📝 Print raw response details
+                rprint(f"[dim]📥 Response received:[/dim]")
+                rprint(f"[dim]   Keys: {list(result.keys())}[/dim]")
+                rprint(f"[dim]   Speakers in response: {result.get('speakers', 'N/A')}[/dim]")
+
                 # Adjust timestamps
                 segments = result.get('segments', [])
                 for segment in segments:
@@ -180,11 +189,16 @@ def transcribe_audio_cloud(
                                 word['start'] += start
                             if 'end' in word:
                                 word['end'] += start
-                
+
                 rprint(f"[green]✅ Transcription complete![/green]")
                 rprint(f"[cyan]Language:[/cyan] {result.get('language', 'unknown')}")
                 rprint(f"[cyan]Processing time:[/cyan] {result.get('processing_time', 0):.2f}s")
-                
+
+                # Debug: Check for speaker info in response
+                speakers_found = list(set(s.get('speaker') for s in segments if 'speaker' in s))
+                rprint(f"[blue]🔍 First segment speaker:[/blue] {segments[0].get('speaker') if segments else 'N/A'}")
+                rprint(f"[blue]🔍 Speakers found:[/blue] {speakers_found if speakers_found else 'None'}")
+
                 return {
                     'language': result.get('language', 'en'),
                     'segments': segments
