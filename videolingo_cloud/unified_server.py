@@ -57,13 +57,13 @@ import uvicorn
 try:
     from rich.console import Console
     _console = Console(log_time=True)
-    def vvprint(*args, **kwargs):
+    def vprint(*args, **kwargs):
         _console.log(*args, **kwargs)
 except ImportError:
     import datetime
-    def vvprint(*args, **kwargs):
+    def vprint(*args, **kwargs):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        vprint(f"[{timestamp}]", *args, **kwargs)
+        print(f"[{timestamp}]", *args, **kwargs)
 
 # Demucs imports
 try:
