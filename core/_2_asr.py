@@ -93,14 +93,11 @@ def transcribe():
     if is_cloud_native() or runtime == "cloud":
         from core.asr_backend.whisperX_asr import transcribe_audio as ts
         rprint("[cyan]☁️ Transcribing audio with Cloud Native ASR...[/cyan]")
-    elif runtime == "local":
-        from core.asr_backend.whisperX_asr import transcribe_audio as ts
-        rprint("[cyan]🎤 Transcribing audio with local model...[/cyan]")
     elif runtime == "elevenlabs":
         from core.asr_backend.elevenlabs_asr import transcribe_audio_elevenlabs as ts
         rprint("[cyan]🎤 Transcribing audio with ElevenLabs API...[/cyan]")
     else:
-        raise ValueError(f"Unsupported whisper.runtime: {runtime}. Use 'local', 'elevenlabs', or enable cloud_native mode.")
+        raise ValueError(f"Unsupported whisper.runtime: {runtime}. Use 'elevenlabs', or enable cloud_native mode.")
 
     for start, end in segments:
         result = ts(_RAW_AUDIO_FILE, vocal_audio, start, end)

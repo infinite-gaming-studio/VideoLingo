@@ -154,14 +154,12 @@ def page_setting():
                 update_key("whisper.language", langs[lang])
                 st.rerun()
 
-        runtime = st.selectbox(t("WhisperX Runtime"), options=["local", "cloud", "elevenlabs"], index=["local", "cloud", "elevenlabs"].index(load_key("whisper.runtime")), help=t("Local runtime requires >8GB GPU, cloud runtime requires 302ai API key, elevenlabs runtime requires ElevenLabs API key"))
+        runtime = st.selectbox(t("WhisperX Runtime"), options=["cloud", "elevenlabs"], index=["cloud", "elevenlabs"].index(load_key("whisper.runtime")), help=t("Cloud runtime requires 302ai API key, elevenlabs runtime requires ElevenLabs API key"))
         if runtime != load_key("whisper.runtime"):
             update_key("whisper.runtime", runtime)
             st.rerun()
 
-        if runtime == "local":
-            st.info(t("Local runtime requires a GPU with at least 8GB memory (e.g. RTX 3060). If yours is insufficient, please use cloud mode."))
-        elif runtime == "elevenlabs":
+        if runtime == "elevenlabs":
             config_input(("ElevenLabs API"), "whisper.elevenlabs_api_key")
 
         with c2:

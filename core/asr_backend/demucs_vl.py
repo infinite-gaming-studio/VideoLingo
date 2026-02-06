@@ -1,16 +1,11 @@
 """
 VideoLingo Demucs Audio Separation Module
-Supports both local GPU processing and cloud-native remote processing
+Supports cloud-native remote processing only.
 
 Cloud Native Mode:
 - When whisper.runtime='cloud' in config.yaml
 - All separation processing is done via remote Demucs cloud service
 - No local torch/demucs dependencies required
-
-Local Mode (Legacy):
-- When whisper.runtime='local' or 'elevenlabs'
-- Uses local GPU for separation processing
-- Requires torch, demucs, and other GPU dependencies
 """
 
 import os
@@ -77,52 +72,6 @@ def check_cloud_available(url: str = None) -> bool:
         return False
     except:
         return False
-
-def separate_audio_local():
-    """Local Demucs processing (requires demucs package)"""
-    try:
-        import torch
-        from demucs.pretrained import get_model
-        from demucs.audio import save_audio
-        from torch.cuda import is_available as is_cuda_available
-        from demucs.api import Separator
-        from demucs.apply import BagOfModels
-        import gc
-    except ImportError as e:
-        raise ImportError(
-            "Local Demucs processing requires 'demucs' package. "
-            "Install with: pip install demucs\n"
-            "Or use cloud mode by setting whisper.whisperX_cloud_url in config.yaml"
-        ) from e
-    
-    class PreloadedSeparator(Separator):
-        def __init__(self, model: BagOfModels, shifts: int = 1, overlap: float = 0.25,
-                     split: bool = True, segment: Optional[int] = None, jobs: int = 0):
-            self._model, self._audio_channels, self._samplerate = model, model.audio_channels, model.samplerate
-            device = "cuda" if is_cuda_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-            self.update_parameter(device=device, shifts=shifts, overlap=overlap, split=split,
-                                segment=segment, jobs=jobs, progress=True, callback=None, callback_arg=None)
-    
-    vprint("🤖 Loading <htdemucs> model...")
-    model = get_model('htdemucs')
-    separator = PreloadedSeparator(model=model, shifts=1, overlap=0.25)
-    
-    vprint("🎵 Separating audio...")
-    _, outputs = separator.separate_audio_file(_RAW_AUDIO_FILE)
-    
-    kwargs = {"samplerate": model.samplerate, "bitrate": 128, "preset": 2, 
-             "clip": "rescale", "as_float": False, "bits_per_sample": 16}
-    
-    vprint("🎤 Saving vocals track...")
-    save_audio(outputs['vocals'].cpu(), _VOCAL_AUDIO_FILE, **kwargs)
-    
-    vprint("🎹 Saving background music...")
-    background = sum(audio for source, audio in outputs.items() if source != 'vocals')
-    save_audio(background.cpu(), _BACKGROUND_AUDIO_FILE, **kwargs)
-    
-    # Clean up memory
-    del outputs, background, model, separator
-    gc.collect()
 
 def separate_audio_cloud(cloud_url: str = None):
     """Cloud Demucs processing via unified API"""
@@ -204,7 +153,7 @@ def separate_audio_cloud(cloud_url: str = None):
 def demucs_audio():
     """
     Main entry point for Demucs audio separation
-    Automatically chooses between local and cloud processing based on configuration
+    Supports Cloud Native Mode only
     """
     if os.path.exists(_VOCAL_AUDIO_FILE) and os.path.exists(_BACKGROUND_AUDIO_FILE):
         vprint(f"[yellow]⚠️ {_VOCAL_AUDIO_FILE} and {_BACKGROUND_AUDIO_FILE} already exist, skip Demucs processing.[/yellow]")
@@ -212,59 +161,29 @@ def demucs_audio():
     
     os.makedirs(_AUDIO_DIR, exist_ok=True)
     
-    # Check if cloud native mode is enabled
-    cloud_native_mode = is_cloud_native()
-    cloud_separation = is_cloud_separation_enabled()
     cloud_url = get_cloud_url()
     
-    if cloud_native_mode:
-        # Cloud Native Mode: Must use cloud processing
-        if not cloud_url:
-            raise ValueError(
-                "Cloud Native Mode is enabled but no cloud URL is configured.\n"
-                "Please set cloud_native.cloud_url in config.yaml"
-            )
-        
-        if not check_cloud_available(cloud_url):
-            raise ConnectionError(
-                f"Cloud Native Mode is enabled but cloud service is not available at {cloud_url}\n"
-                "Please ensure the cloud server is running and accessible."
-            )
-        
-        try:
-            vprint("[cyan]☁️ Cloud Native Mode: Using remote Demucs service...[/cyan]")
-            separate_audio_cloud(cloud_url)
-            vprint("[green]✨ Audio separation completed (cloud native)![/green]")
-            return
-        except Exception as e:
-            raise RuntimeError(
-                f"Cloud separation failed in Cloud Native Mode: {e}\n"
-                "Please check the cloud server status or disable cloud_native mode."
-            )
+    if not cloud_url:
+        raise ValueError(
+            "Cloud Native Mode is enabled but no cloud URL is configured.\n"
+            "Please set cloud_native.cloud_url in config.yaml"
+        )
     
-    # Legacy Mode: Try cloud first, then fallback to local
-    if cloud_url and check_cloud_available(cloud_url):
-        # Use cloud processing
-        try:
-            separate_audio_cloud(cloud_url)
-            vprint("[green]✨ Audio separation completed (cloud)![/green]")
-            return
-        except Exception as e:
-            vprint(f"[yellow]⚠️ Cloud processing failed: {e}[/yellow]")
-            vprint("[yellow]Falling back to local processing...[/yellow]")
+    if not check_cloud_available(cloud_url):
+        raise ConnectionError(
+            f"Cloud Native Mode is enabled but cloud Demucs service is not available at {cloud_url}\n"
+            "Please ensure the cloud server is running and accessible."
+        )
     
-    # Use local processing
     try:
-        separate_audio_local()
-        vprint("[green]✨ Audio separation completed (local)![/green]")
-    except ImportError as e:
-        vprint(f"[red]❌ {e}[/red]")
-        vprint("[yellow]To use cloud Demucs:[/yellow]")
-        vprint(" 1. Deploy unified server using videolingo_cloud/Unified_Cloud_Server.ipynb")
-        vprint(" 2. Set whisper.whisperX_cloud_url in config.yaml")
-        vprint("[yellow]Or install demucs locally:[/yellow]")
-        vprint(" pip install demucs")
-        raise
+        vprint("[cyan]☁️ Cloud Native Mode: Using remote Demucs service...[/cyan]")
+        separate_audio_cloud(cloud_url)
+        vprint("[green]✨ Audio separation completed (cloud native)![/green]")
+    except Exception as e:
+        raise RuntimeError(
+            f"Cloud separation failed: {e}\n"
+            "Please check the cloud server status."
+        )
 
 if __name__ == "__main__":
     demucs_audio()
