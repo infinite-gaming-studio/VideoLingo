@@ -1,6 +1,7 @@
 import functools
 import time
 import os
+import random
 from rich import print as rprint
 
 # ------------------------------
@@ -22,7 +23,10 @@ def except_handler(error_msg, retry=0, delay=1, default_return=None):
                         if default_return is not None:
                             return default_return
                         raise last_exception
-                    time.sleep(delay * (2**i))
+                    
+                    # Exponential backoff with jitter
+                    sleep_time = delay * (2**i) + random.uniform(0, 1)
+                    time.sleep(sleep_time)
         return wrapper
     return decorator
 
