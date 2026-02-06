@@ -109,10 +109,10 @@ def transcribe_audio_cloud(
     start: float,
     end: float,
     cloud_url: str = None,
-    language: str = None,
-    model: str = "large-v3",
     align: bool = True,
     speaker_diarization: bool = False,
+    min_speakers: Optional[int] = None,
+    max_speakers: Optional[int] = None,
     timeout: int = DEFAULT_TIMEOUT,
     token: str = None
 ) -> Dict[str, Any]:
@@ -147,6 +147,10 @@ def transcribe_audio_cloud(
                     'align': str(align).lower(),
                     'speaker_diarization': str(speaker_diarization).lower()
                 }
+                if min_speakers is not None:
+                    data['min_speakers'] = min_speakers
+                if max_speakers is not None:
+                    data['max_speakers'] = max_speakers
                 
                 response = requests.post(
                     f"{url}/asr/transcribe",
@@ -391,9 +395,15 @@ def transcribe_audio_cloud_compatible(
     try:
         whisper_language = load_key("whisper.language", "en")
         model = load_key("whisper.model", "large-v3")
+        diarization = load_key("whisper.diarization", False)
+        min_speakers = load_key("whisper.min_speakers", None)
+        max_speakers = load_key("whisper.max_speakers", None)
     except:
         whisper_language = "en"
         model = "large-v3"
+        diarization = False
+        min_speakers = None
+        max_speakers = None
     
     # Use unified cloud configuration
     cloud_url = get_cloud_url()
@@ -413,6 +423,9 @@ def transcribe_audio_cloud_compatible(
         cloud_url=cloud_url,
         language=whisper_language if whisper_language != 'auto' else None,
         model=model,
+        speaker_diarization=diarization,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
         token=token
     )
 

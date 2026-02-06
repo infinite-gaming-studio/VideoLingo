@@ -196,10 +196,12 @@ def transcribe_audio_cloud(
                     'language': language if language else '',
                     'model': model,
                     'align': str(align).lower(),
-                    'speaker_diarization': str(speaker_diarization).lower(),
-                    'min_speakers': min_speakers if min_speakers is not None else '',
-                    'max_speakers': max_speakers if max_speakers is not None else ''
+                    'speaker_diarization': str(speaker_diarization).lower()
                 }
+                if min_speakers is not None:
+                    data['min_speakers'] = min_speakers
+                if max_speakers is not None:
+                    data['max_speakers'] = max_speakers
                 
                 vprint(f"[blue]📤 Request Data:[/blue] {data}")
                 # Make request
@@ -413,6 +415,8 @@ def transcribe_audio_cloud_compatible(
         model = load_key("whisper.model", "large-v3")
         token = get_cloud_token()
         diarization = load_key("whisper.diarization", False)
+        min_speakers = load_key("whisper.min_speakers", None)
+        max_speakers = load_key("whisper.max_speakers", None)
     except Exception as e:
         # Fallback to defaults
         whisper_language = "en"
@@ -420,6 +424,8 @@ def transcribe_audio_cloud_compatible(
         model = "large-v3"
         token = get_cloud_token()
         diarization = False
+        min_speakers = None
+        max_speakers = None
     
     if not cloud_url:
         raise ValueError(
@@ -440,6 +446,8 @@ def transcribe_audio_cloud_compatible(
         language=whisper_language if whisper_language != 'auto' else None,
         model=model,
         speaker_diarization=diarization,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
         token=token
     )
 

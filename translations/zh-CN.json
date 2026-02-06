@@ -121,5 +121,8 @@
     "Unified cloud service URL for WhisperX ASR and Demucs separation": "用于 WhisperX ASR 和 Demucs 分离的统一云端服务 URL",
     "Unified authentication token for all cloud services": "所有云端服务的统一身份验证令牌",
     "Speaker Diarization": "角色识别",
-    "Enable speaker diarization (multi-role detection). Cloud runtime only.": "启用角色识别（多发言人检测），仅限云端模式。"
+    "Enable speaker diarization (multi-role detection). Cloud runtime only.": "启用角色识别（多发言人检测），仅限云端模式。",
+    "Min Speakers": "最小角色数",
+    "Max Speakers": "最大角色数",
+    "Set the range of speakers for diarization.": "设置角色识别的人数范围。"
 }

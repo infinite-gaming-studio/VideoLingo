@@ -107,6 +107,7 @@ class TranscriptionRequest(BaseModel):
     speaker_diarization: bool = Field(default=False, description="Perform speaker diarization")
     min_speakers: Optional[int] = Field(default=None, description="Minimum number of speakers")
     max_speakers: Optional[int] = Field(default=None, description="Maximum number of speakers")
+    hf_token: Optional[str] = Field(default=None, description="Hugging Face access token for diarization model")
 
 class TranscriptionResponse(BaseModel):
     success: bool
@@ -139,6 +140,9 @@ async def lifespan(app: FastAPI):
     # Print server version on startup
     vprint(f"📌 WhisperX Cloud Server v{SERVER_VERSION}")
     vprint(f"   With PyTorch weights_only patch for PyTorch 2.6+ compatibility\n")
+
+    device, compute_type = get_device()
+    vprint(f"🚀 Using device: {device} ({compute_type})")
 
     # Preload models
     vprint("📦 Preloading models...")
@@ -220,11 +224,21 @@ def get_or_load_diarize_model():
     """Load or retrieve cached diarization model"""
     if 'diarize' not in diarize_model_cache:
         vprint(f"📥 Loading Diarization model on {device}...")
-        diarize_model = whisperx.DiarizationPipeline(
-            model_name="pyannote/speaker-diarization-3.1", device=device
-        )
-        diarize_model_cache['diarize'] = diarize_model
-        vprint(f"✅ Diarization model loaded")
+        
+        hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+        
+        try:
+            diarize_model = whisperx.diarize.DiarizationPipeline(
+                model_name="pyannote/speaker-diarization-3.1",
+                device=device,
+                use_auth_token=hf_token
+            )
+            diarize_model_cache['diarize'] = diarize_model
+            vprint(f"✅ Diarization model loaded")
+        except AttributeError as e:
+            if "NoneType" in str(e) and "to" in str(e):
+                 raise ValueError("Failed to load pyannote pipeline. Please check your HF_TOKEN and model permissions.") from e
+            raise e
     return diarize_model_cache['diarize']
 
 def process_audio(audio_bytes: bytes):

@@ -112,5 +112,8 @@
     "Authentication Token": "Authentication Token",
     "Token for cloud services authentication": "Token for cloud services authentication",
     "Speaker Diarization": "Speaker Diarization",
-    "Enable speaker diarization (multi-role detection). Cloud runtime only.": "Enable speaker diarization (multi-role detection). Cloud runtime only."
+    "Enable speaker diarization (multi-role detection). Cloud runtime only.": "Enable speaker diarization (multi-role detection). Cloud runtime only.",
+    "Min Speakers": "Min Speakers",
+    "Max Speakers": "Max Speakers",
+    "Set the range of speakers for diarization.": "Set the range of speakers for diarization."
 }

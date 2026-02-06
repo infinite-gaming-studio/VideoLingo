@@ -25,6 +25,7 @@ def page_setting():
                 "display_language",
                 "api.key", "api.base_url", "api.model", "api.llm_support_json",
                 "whisper.language", "whisper.runtime", "whisper.elevenlabs_api_key", "whisper.diarization",
+                "whisper.min_speakers", "whisper.max_speakers",
                 "cloud_native.cloud_url", "cloud_native.token",
                 "target_language", "demucs", "burn_subtitles", "tts_method",
                 "sf_fish_tts.api_key", "sf_fish_tts.mode", "sf_fish_tts.voice",
@@ -186,6 +187,19 @@ def page_setting():
         if diarization != load_key("whisper.diarization"):
             update_key("whisper.diarization", diarization)
             st.rerun()
+        
+        if diarization:
+            c_min, c_max = st.columns(2)
+            with c_min:
+                min_s = st.number_input(t("Min Speakers"), value=int(load_key("whisper.min_speakers") or 1), min_value=1, max_value=20, step=1, help=t("Set the range of speakers for diarization."))
+                if min_s != load_key("whisper.min_speakers"):
+                    update_key("whisper.min_speakers", min_s)
+                    st.rerun()
+            with c_max:
+                max_s = st.number_input(t("Max Speakers"), value=int(load_key("whisper.max_speakers") or 1), min_value=1, max_value=20, step=1, help=t("Set the range of speakers for diarization."))
+                if max_s != load_key("whisper.max_speakers"):
+                    update_key("whisper.max_speakers", max_s)
+                    st.rerun()
 
         # Show cloud settings only if cloud runtime is selected
         if runtime == "cloud":

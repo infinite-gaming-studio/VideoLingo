@@ -38,6 +38,8 @@ whisper:
 
   # Speaker Diarization (Multi-role detection)
   diarization: false
+  min_speakers: 
+  max_speakers: 
 
 # ==================== 云端服务统一配置 ====================
 # 推荐使用此配置方式，所有服务使用同一个云端地址和令牌
