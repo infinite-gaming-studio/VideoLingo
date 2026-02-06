@@ -9,6 +9,33 @@ from rich.table import Table
 from core.utils.models import _3_1_SPLIT_BY_NLP, _3_2_SPLIT_BY_MEANING
 console = Console()
 
+def split_sentence(sentence, num_parts=2, word_limit=20):
+    """Split a single long sentence into multiple parts using GPT."""
+    prompt = get_split_prompt(sentence, num_parts, word_limit)
+    
+    def valid_split(response_data):
+        if "choice" not in response_data:
+            return {"status": "error", "message": "Missing 'choice' in response"}
+        choice = str(response_data["choice"])
+        if choice not in ["1", "2"]:
+            return {"status": "error", "message": f"Invalid choice: {choice}"}
+        split_key = f"split{choice}"
+        if split_key not in response_data:
+            return {"status": "error", "message": f"Missing '{split_key}' in response"}
+        return {"status": "success", "message": "Split verification successful"}
+
+    try:
+        response_data = ask_gpt(prompt, resp_type='json', valid_def=valid_split, log_title='split_by_meaning')
+        choice = str(response_data["choice"])
+        best_split_raw = response_data[f"split{choice}"]
+        
+        # Convert [br] to \n
+        return best_split_raw.replace('[br]', '\n')
+    except Exception as e:
+        console.print(f"[red]Split failed for sentence: {sentence[:50]}... Error: {e}[/red]")
+        # Fallback: simple split if GPT fails
+        return sentence
+
 def tokenize_sentence(sentence, nlp):
     doc = nlp(sentence)
     return [token.text for token in doc]
