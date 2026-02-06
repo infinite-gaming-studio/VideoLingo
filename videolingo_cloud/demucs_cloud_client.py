@@ -40,7 +40,9 @@ def get_cloud_url() -> str:
         return url.rstrip('/')
     
     try:
-        url = load_key("demucs_cloud_url", "")
+        url = load_key("cloud_native.cloud_url", "")
+        if not url:
+            url = load_key("demucs_cloud_url", "")
         if not url:
             url = load_key("whisper.whisperX_cloud_url", "")
         if url:
@@ -219,10 +221,12 @@ class DemucsCloudClient:
 
         # Get token
         if not token:
-            token = os.getenv("WHISPERX_CLOUD_TOKEN")
+            token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
             if not token:
                 try:
-                    token = load_key("whisper.whisperX_token", "")
+                    token = load_key("cloud_native.token", "")
+                    if not token:
+                        token = load_key("whisper.whisperX_token", "")
                 except:
                     pass
         
@@ -291,8 +295,12 @@ def separate_audio_cloud_compatible(
     """
     # Get config from VideoLingo
     try:
-        cloud_url = load_key("demucs_cloud_url", "")
-        token = load_key("whisper.whisperX_token", "")
+        cloud_url = get_cloud_url()
+        token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
+        if not token:
+            token = load_key("cloud_native.token", "")
+            if not token:
+                 token = load_key("whisper.whisperX_token", "")
     except Exception as e:
         cloud_url = get_cloud_url()
         token = None

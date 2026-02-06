@@ -66,6 +66,22 @@ def get_cloud_url() -> str:
     return ""
 
 
+def get_cloud_token() -> str:
+    """Get cloud token from various sources"""
+    # Priority: environment variable > cloud_native.token > whisperX_token
+    token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN") or ""
+    if token:
+        return token
+    
+    try:
+        token = load_key("cloud_native.token", "")
+        if not token:
+            token = load_key("whisper.whisperX_token", "")
+        return token
+    except:
+        return ""
+
+
 def check_cloud_connection(url: str = None, timeout: int = 10) -> Dict[str, Any]:
     """
     Check if cloud WhisperX service is available
@@ -381,15 +397,15 @@ def transcribe_audio_cloud_compatible(
     # Get config from VideoLingo
     try:
         whisper_language = load_key("whisper.language", "en")
-        cloud_url = load_key("whisper.whisperX_cloud_url", "")
+        cloud_url = get_cloud_url()
         model = load_key("whisper.model", "large-v3")
-        token = load_key("whisper.whisperX_token", "")
+        token = get_cloud_token()
     except Exception as e:
         # Fallback to defaults
         whisper_language = "en"
         cloud_url = get_cloud_url()
         model = "large-v3"
-        token = None
+        token = get_cloud_token()
     
     if not cloud_url:
         raise ValueError(

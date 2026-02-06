@@ -68,9 +68,9 @@ def split_long_by_root_main(nlp):
     all_split_sentences = []
     for sentence in sentences:
         doc = nlp(sentence.strip())
-        if len(doc) > 60:
+        if len(doc) > 40:
             split_sentences = split_long_sentence(doc)
-            if any(len(nlp(sent)) > 60 for sent in split_sentences):
+            if any(len(nlp(sent)) > 40 for sent in split_sentences):
                 split_sentences = [subsent for sent in split_sentences for subsent in split_extremely_long_sentence(nlp(sent))]
             all_split_sentences.extend(split_sentences)
             rprint(f"[yellow]✂️  Splitting long sentences by root: {sentence[:30]}...[/yellow]")
