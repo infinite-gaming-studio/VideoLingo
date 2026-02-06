@@ -544,6 +544,11 @@ app.include_router(separation_router)
 
 def run_server(host="0.0.0.0", port=8000):
     """Run the server (for programmatic use)"""
+    try:
+        import nest_asyncio
+        nest_asyncio.apply()
+    except ImportError:
+        pass
     uvicorn.run(app, host=host, port=port)
 
 if __name__ == "__main__":
