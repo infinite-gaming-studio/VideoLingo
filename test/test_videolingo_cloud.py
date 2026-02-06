@@ -12,8 +12,10 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from whisperx_cloud.whisperx_cloud_client import (
-    WhisperXCloudClient,
+from videolingo_cloud.videolingo_cloud_client import (
+    VideoLingoCloudClient,
+    get_cloud_url,
+    get_cloud_token,
     check_cloud_connection,
     get_server_info,
     transcribe_audio_cloud
@@ -60,7 +62,7 @@ def test_health_check():
     """测试服务健康检查"""
     rprint("\n[bold cyan]=== 1. 健康检查 ===[/bold cyan]\n")
 
-    client = WhisperXCloudClient(CLOUD_URL)
+    client = VideoLingoCloudClient(CLOUD_URL)
 
     try:
         health = client.health_check()
@@ -94,15 +96,15 @@ def test_connection():
 
 
 def test_transcribe_simple():
-    """简单转录测试 - 直接使用 WhisperXCloudClient"""
-    rprint("\n[bold cyan]=== 3. 简单转录测试 (使用 WhisperXCloudClient) ===[/bold cyan]\n")
+    """简单转录测试 - 直接使用 VideoLingoCloudClient"""
+    rprint("\n[bold cyan]=== 3. 简单转录测试 (使用 VideoLingoCloudClient) ===[/bold cyan]\n")
     
     # 转换视频为音频
     audio_file = OUTPUT_DIR / 'test_audio.mp3'
     convert_video_to_audio(VIDEO_FILE, str(audio_file))
     
     # 创建客户端
-    client = WhisperXCloudClient(CLOUD_URL)
+    client = VideoLingoCloudClient(CLOUD_URL)
     
     # 转录音频
     rprint(f"[blue]🎯 开始转录...[/blue]")
@@ -165,8 +167,8 @@ def test_transcribe_with_api_function():
         shutil.copy(audio_file, vocal_audio_file)
     
     # 获取音频时长
-    from whisperx_cloud.whisperx_cloud_client import WhisperXCloudClient
-    client = WhisperXCloudClient(CLOUD_URL)
+    from videolingo_cloud.videolingo_cloud_client import VideoLingoCloudClient
+    client = VideoLingoCloudClient(CLOUD_URL)
     
     # 转录前 60 秒（测试）
     start_time = 0.0

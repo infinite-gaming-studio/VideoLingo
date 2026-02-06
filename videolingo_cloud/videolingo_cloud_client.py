@@ -1,9 +1,9 @@
 """
-WhisperX Cloud API Client for VideoLingo
+VideoLingo Cloud API Client for VideoLingo
 Integrates with VideoLingo to use remote WhisperX service
 
 Usage:
-1. Deploy WhisperX on Colab/Kaggle using WhisperX_Cloud_Unified.ipynb
+1. Deploy server using Unified_Cloud_Server.ipynb
 2. Set the WHISPERX_CLOUD_URL in config.yaml
 3. VideoLingo will automatically use the cloud service
 """
@@ -43,7 +43,7 @@ RETRY_DELAY = 5  # seconds
 def get_cloud_url() -> str:
     """Get cloud URL from various sources"""
     # Priority: environment variable > config.yaml
-    url = os.getenv("WHISPERX_CLOUD_URL", "")
+    url = os.getenv("VIDEOLINGO_CLOUD_URL") or os.getenv("WHISPERX_CLOUD_URL") or ""
     if url:
         return url.rstrip('/')
     
@@ -146,7 +146,7 @@ def transcribe_audio_cloud(
     # auth headers
     headers = {}
     if not token:
-        token = os.getenv("WHISPERX_CLOUD_TOKEN")
+        token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
         if not token:
             try:
                 token = load_key("whisper.whisperX_token", "")
@@ -228,7 +228,7 @@ def transcribe_audio_cloud(
     raise Exception(f"Cloud transcription failed after {MAX_RETRIES} attempts: {last_error}")
 
 
-class WhisperXCloudClient:
+class VideoLingoCloudClient:
     """
     Client for WhisperX Cloud API
     Provides a convenient interface for interacting with the cloud service
@@ -350,7 +350,7 @@ def transcribe_audio_cloud_compatible(
     if not cloud_url:
         raise ValueError(
             "whisper.whisperX_cloud_url not configured in config.yaml.\n"
-            "Please deploy WhisperX Cloud using whisperx_cloud/WhisperX_Cloud.ipynb "
+            "Please deploy the cloud server using videolingo_cloud/Unified_Cloud_Server.ipynb "
             "and set the URL in config.yaml:\n"
             "  whisper:\n"
             "    runtime: 'cloud'\n"
@@ -371,7 +371,7 @@ def transcribe_audio_cloud_compatible(
 
 def get_server_info(url: str = None) -> Dict[str, Any]:
     """Get detailed information about the cloud server"""
-    client = WhisperXCloudClient(url)
+    client = VideoLingoCloudClient(url)
     try:
         health = client.health_check()
         stats = client.get_stats()
@@ -391,7 +391,7 @@ def get_server_info(url: str = None) -> Dict[str, Any]:
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description='WhisperX Cloud Client')
+    parser = argparse.ArgumentParser(description='VideoLingoCloudClient')
     parser.add_argument('--url', help='Cloud API URL')
     parser.add_argument('--check', action='store_true', help='Check connection')
     parser.add_argument('--stats', action='store_true', help='Get server stats')
@@ -407,7 +407,7 @@ if __name__ == "__main__":
     if not url:
         print("❌ No cloud URL configured!")
         print("\nTo configure:")
-        print("1. Deploy WhisperX Cloud using WhisperX_Cloud_Unified.ipynb")
+        print("1. Deploy unified server using Unified_Cloud_Server.ipynb")
         print("2. Set WHISPERX_CLOUD_URL environment variable, or")
         print("3. Update config.yaml with whisper.whisperX_cloud_url")
         sys.exit(1)
@@ -424,7 +424,7 @@ if __name__ == "__main__":
             print(f"❌ Server unavailable: {result.get('error')}")
     
     elif args.stats:
-        client = WhisperXCloudClient(url)
+        client = VideoLingoCloudClient(url)
         try:
             stats = client.get_stats()
             print("📊 Server Statistics:")
@@ -443,7 +443,7 @@ if __name__ == "__main__":
             print(f"❌ File not found: {args.transcribe}")
             sys.exit(1)
         
-        client = WhisperXCloudClient(url)
+        client = VideoLingoCloudClient(url)
         try:
             print(f"🎯 Transcribing: {args.transcribe}")
             result = client.transcribe(
@@ -468,6 +468,6 @@ if __name__ == "__main__":
         else:
             print(f"\n❌ Failed to connect to cloud WhisperX: {result.get('error')}")
             print("\nTo deploy:")
-            print("1. Open whisperx_cloud/WhisperX_Cloud_Unified.ipynb in Google Colab or Kaggle")
+            print("1. Open videolingo_cloud/Unified_Cloud_Server.ipynb in Google Colab or Kaggle")
             print("2. Run all cells and copy the ngrok URL")
             print("3. Set WHISPERX_CLOUD_URL environment variable or update config.yaml")

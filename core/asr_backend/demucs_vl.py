@@ -135,7 +135,7 @@ def separate_audio_cloud(cloud_url: str = None):
     
     try:
         # Try unified client first
-        from whisperx_cloud.unified_client import separate_audio_cloud as cloud_separate
+        from videolingo_cloud.videolingo_cloud_client import separate_audio_cloud as cloud_separate
         cloud_separate(
             audio_file=_RAW_AUDIO_FILE,
             vocals_output=_VOCAL_AUDIO_FILE,
@@ -243,7 +243,7 @@ def demucs_audio():
     except ImportError as e:
         rprint(f"[red]❌ {e}[/red]")
         rprint("[yellow]To use cloud Demucs:[/yellow]")
-        rprint(" 1. Deploy unified server using whisperx_cloud/Unified_Cloud_Server.ipynb")
+        rprint(" 1. Deploy unified server using videolingo_cloud/Unified_Cloud_Server.ipynb")
         rprint(" 2. Set whisper.whisperX_cloud_url in config.yaml")
         rprint("[yellow]Or install demucs locally:[/yellow]")
         rprint(" pip install demucs")

@@ -25,8 +25,8 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 # Workaround for CUDA compatibility issues
 RUN ldconfig /usr/local/cuda-$(echo $CUDA_VERSION | cut -d. -f1,2)/compat/
 
-# Copy project code
-COPY . .
+# Clone project code from GitHub
+RUN rm -rf * && git clone https://github.com/infinite-gaming-studio/VideoLingo.git .
 
 # Install PyTorch and torchaudio
 RUN pip install torch==2.0.0 torchaudio==2.0.0 --index-url https://download.pytorch.org/whl/cu118

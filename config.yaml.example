@@ -25,17 +25,14 @@ whisper:
   # 语言: zh (中文), en (英文), ja (日文), auto (自动检测)
   language: 'zh'
   
-  # 运行模式:
-  # - local: 本地运行 (CPU模式, 较慢)
-  # - cloud: 使用 WhisperX 云端服务 (推荐, 如果启用了 whisperx-cloud 服务)
+  # 运行模式: ["local", "elevenlabs", "cloud"]
+  # - local: 使用本地 WhisperX 模型 (需要 GPU)
   # - elevenlabs: 使用 ElevenLabs API
+  # - cloud: 使用云端服务 (配置 cloud_native)
   runtime: 'local'
   
-  # WhisperX 云端服务 URL (仅在 runtime: cloud 时使用)
-  # 如果使用 docker-compose 启动的本地服务, 请设置为: http://whisperx-cloud:8000
-  whisperX_cloud_url: 'http://whisperx-cloud:8000'
-  # WhisperX API token (用于远程 GPU 服务器验证)
-  whisperX_token: ''
+  # ElevenLabs API key
+  elevenlabs_api_key: ''
 
 # ==================== 人声分离配置 ====================
 # Demucs 人声分离 (分离人声和背景音乐)
@@ -46,8 +43,8 @@ whisper:
 # - false: 关闭人声分离
 #
 # 云端模式配置:
-# 1. 部署 whisperx_cloud/Unified_Cloud_Server.ipynb 到 GPU 服务器 (Colab/Kaggle)
-# 2. 将服务 URL 配置到 whisperX_cloud_url (统一服务, 无需单独配置 demucs)
+# 1. 部署 videolingo_cloud/Unified_Cloud_Server.ipynb 到 GPU 服务器 (Colab/Kaggle)
+# 2. 将服务 URL 配置到 cloud_native.cloud_url (统一服务, 无需单独配置 demucs)
 # 3. 设置 demucs: 'cloud'
 #
 demucs: 'cloud'

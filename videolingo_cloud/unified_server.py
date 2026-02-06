@@ -71,6 +71,8 @@ warnings.filterwarnings("ignore")
 # Global caches
 whisper_model_cache = {}
 demucs_model_cache = {}
+align_model_cache = {}
+diarize_model_cache = {}
 device = None
 compute_type = None
 
@@ -90,7 +92,7 @@ security = HTTPBearer()
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Verify the bearer token against environment variable"""
     # Accept both variants for compatibility
-    token = os.getenv("WHISPER_SERVER_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
+    token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPER_SERVER_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
     if not token:
         # If no token is set in environment, allow all requests for backward compatibility
         # but print a warning on first hit?
@@ -140,6 +142,8 @@ class HealthResponse(BaseModel):
     gpu_memory: Optional[float] = None
     whisper_models_loaded: list
     demucs_model_loaded: bool
+    align_models_loaded: list
+    diarize_model_loaded: bool
     services: dict
     server_version: str = SERVER_VERSION
     platform: str
@@ -178,6 +182,30 @@ def get_or_load_demucs_model():
         print(f"✅ Demucs model loaded (device: {device})")
 
     return demucs_model_cache['htdemucs']
+
+def get_or_load_align_model(language_code: str):
+    """Load or retrieve cached alignment model"""
+    if language_code not in align_model_cache:
+        print(f"📥 Loading alignment model for: {language_code}...")
+        align_model, align_metadata = whisperx.load_align_model(
+            language_code=language_code, device=device
+        )
+        align_model_cache[language_code] = (align_model, align_metadata)
+        print(f"✅ Alignment model loaded: {language_code}")
+    return align_model_cache[language_code]
+
+def get_or_load_diarize_model():
+    """Load or retrieve cached diarization model"""
+    if 'diarize' not in diarize_model_cache:
+        print(f"📥 Loading Diarization model on {device}...")
+        # Use a dummy variable to avoid re-loading if it fails?
+        # For now simple cache
+        diarize_model = whisperx.DiarizationPipeline(
+            model_name="pyannote/speaker-diarization-3.1", device=device
+        )
+        diarize_model_cache['diarize'] = diarize_model
+        print(f"✅ Diarization model loaded")
+    return diarize_model_cache['diarize']
 
 # ============== Audio Processing ==============
 
@@ -219,6 +247,20 @@ async def lifespan(app: FastAPI):
     get_or_load_whisper_model("large-v3")
     if DEMUC_AVAILABLE:
         get_or_load_demucs_model()
+    
+    # Preload alignment for common languages
+    try:
+        get_or_load_align_model("en")
+        get_or_load_align_model("zh")
+    except Exception as e:
+        print(f"⚠️ Failed to preload some alignment models: {e}")
+        
+    # Preload diarization
+    try:
+        get_or_load_diarize_model()
+    except Exception as e:
+        print(f"⚠️ Failed to preload diarization model: {e}")
+        
     print("✅ All models loaded!\n")
     
     yield
@@ -288,26 +330,19 @@ async def transcribe(
         word_segments = None
         if align and segments:
             print("🔄 Aligning words...")
-            align_model, align_metadata = whisperx.load_align_model(
-                language_code=detected_language, device=device
-            )
+            align_model, align_metadata = get_or_load_align_model(detected_language)
             result_aligned = whisperx.align(
                 segments, align_model, align_metadata, audio_array, device,
                 return_char_alignments=False
             )
             segments = result_aligned.get("segments", [])
             word_segments = result_aligned.get("word_segments", [])
-            del align_model
-            if device == "cuda":
-                torch.cuda.empty_cache()
         
         # Speaker diarization
         speakers = None
         if speaker_diarization:
             print("🎭 Speaker diarization...")
-            diarize_model = whisperx.DiarizationPipeline(
-                model_name="pyannote/speaker-diarization-3.1", device=device
-            )
+            diarize_model = get_or_load_diarize_model()
             diarize_segments = diarize_model(audio_array)
             result_diarized = whisperx.assign_word_speakers(diarize_segments, {"segments": segments})
             segments = result_diarized.get("segments", [])
@@ -469,6 +504,8 @@ async def health_check():
         gpu_memory=gpu_mem,
         whisper_models_loaded=list(whisper_model_cache.keys()),
         demucs_model_loaded='htdemucs' in demucs_model_cache,
+        align_models_loaded=list(align_model_cache.keys()),
+        diarize_model_loaded='diarize' in diarize_model_cache,
         services={
             "asr": {"available": True, "endpoint": "/asr/transcribe"},
             "separation": {"available": DEMUC_AVAILABLE, "endpoint": "/separation/separate"}
@@ -481,6 +518,8 @@ async def clear_cache():
     """Clear all model caches"""
     whisper_model_cache.clear()
     demucs_model_cache.clear()
+    align_model_cache.clear()
+    diarize_model_cache.clear()
     if device == "cuda":
         torch.cuda.empty_cache()
     return {"status": "All caches cleared"}

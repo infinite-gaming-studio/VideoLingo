@@ -30,7 +30,7 @@ whisper:
   # 运行模式: ["local", "elevenlabs", "cloud"]
   # - local: 使用本地 WhisperX 模型 (需要 GPU)
   # - elevenlabs: 使用 ElevenLabs API
-  # - cloud: 使用云端服务 (配置 cloud_native 或 whisperX_cloud_url)
+  # - cloud: 使用云端服务 (配置 cloud_native)
   runtime: 'local'
 
   # ElevenLabs API key

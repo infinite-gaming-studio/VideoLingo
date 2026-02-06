@@ -56,4 +56,4 @@ xmltodict
 # - pytorch-lightning==2.3.3
 # - lightning==2.3.3
 #
-# These are all handled by the remote cloud service running whisperx_cloud/
+# These are all handled by the remote cloud service running videolingo_cloud/

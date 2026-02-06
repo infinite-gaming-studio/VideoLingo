@@ -90,7 +90,7 @@ def transcribe_audio_cloud(raw_audio_file, vocal_audio_file, start, end):
     Cloud-native ASR processing via unified cloud client
     Sends audio segment to remote WhisperX service
     """
-    from whisperx_cloud.unified_client import transcribe_audio_cloud_compatible
+    from videolingo_cloud.videolingo_cloud_client import transcribe_audio_cloud_compatible
     
     rprint(f"[cyan]☁️ Using Cloud Native ASR for segment {start:.2f}s to {end:.2f}s...[/cyan]")
     

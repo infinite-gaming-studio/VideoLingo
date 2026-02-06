@@ -7,8 +7,8 @@ FROM videolingo:base
 # 设置工作目录 / Set working directory
 WORKDIR /app
 
-# 复制项目代码 / Copy project code
-COPY . /app
+# 清空并克隆项目代码 / Clean and clone project code
+RUN rm -rf ./* && git clone https://github.com/infinite-gaming-studio/VideoLingo.git .
 
 # 环境变量配置 / Environment variables
 ENV ANTHROPIC_API_KEY="" 

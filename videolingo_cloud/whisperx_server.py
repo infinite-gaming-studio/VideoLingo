@@ -57,7 +57,7 @@ security = HTTPBearer()
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Verify the bearer token against environment variable"""
-    token = os.getenv("WHISPER_SERVER_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
+    token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPER_SERVER_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
     if not token:
         # If no token is set in environment, allow all requests (or warn?)
         # For security, let's say if variable is not set, we assume no auth needed? 
@@ -71,6 +71,8 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
 
 # Global model cache
 model_cache = {}
+align_model_cache = {}
+diarize_model_cache = {}
 device = None
 compute_type = None
 
@@ -112,6 +114,8 @@ class HealthResponse(BaseModel):
     mps_available: bool
     gpu_memory: Optional[float] = None
     models_loaded: list
+    align_models_loaded: list
+    diarize_model_loaded: bool
     server_version: str = SERVER_VERSION
     platform: str
 
@@ -124,26 +128,30 @@ async def lifespan(app: FastAPI):
     print(f"📌 WhisperX Cloud Server v{SERVER_VERSION}")
     print(f"   With PyTorch weights_only patch for PyTorch 2.6+ compatibility\n")
 
-    # Detect device with MPS support
-    device, compute_type = get_device()
+    # Preload models
+    print("📦 Preloading models...")
+    get_or_load_model("large-v3")
     
-    if device == "cuda":
-        gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-        print(f"🚀 Using CUDA GPU: {torch.cuda.get_device_name(0)}")
-        print(f"💾 GPU Memory: {gpu_mem:.2f} GB")
-        print(f"⚙️ Compute type: {compute_type}")
-    elif device == "mps":
-        print(f"🍎 Using Apple Silicon MPS")
-        print(f"⚙️ Compute type: {compute_type}")
-    else:
-        print("💻 Using CPU (no GPU detected)")
-        print(f"⚙️ Compute type: {compute_type}")
+    try:
+        get_or_load_align_model("en")
+        get_or_load_align_model("zh")
+    except Exception as e:
+        print(f"⚠️ Failed to preload some alignment models: {e}")
+        
+    try:
+        get_or_load_diarize_model()
+    except Exception as e:
+        print(f"⚠️ Failed to preload diarization model: {e}")
+        
+    print("✅ All models loaded!\n")
 
     yield
 
     # Cleanup
     print("Cleaning up models...")
     model_cache.clear()
+    align_model_cache.clear()
+    diarize_model_cache.clear()
     if device == "cuda":
         torch.cuda.empty_cache()
 
@@ -185,6 +193,28 @@ def get_or_load_model(model_name: str, language: Optional[str] = None, batch_siz
     
     return model_cache[cache_key]
 
+def get_or_load_align_model(language_code: str):
+    """Load or retrieve cached alignment model"""
+    if language_code not in align_model_cache:
+        print(f"📥 Loading alignment model for: {language_code}...")
+        align_model, align_metadata = whisperx.load_align_model(
+            language_code=language_code, device=device
+        )
+        align_model_cache[language_code] = (align_model, align_metadata)
+        print(f"✅ Alignment model loaded: {language_code}")
+    return align_model_cache[language_code]
+
+def get_or_load_diarize_model():
+    """Load or retrieve cached diarization model"""
+    if 'diarize' not in diarize_model_cache:
+        print(f"📥 Loading Diarization model on {device}...")
+        diarize_model = whisperx.DiarizationPipeline(
+            model_name="pyannote/speaker-diarization-3.1", device=device
+        )
+        diarize_model_cache['diarize'] = diarize_model
+        print(f"✅ Diarization model loaded")
+    return diarize_model_cache['diarize']
+
 def process_audio(audio_bytes: bytes):
     """Load and preprocess audio"""
     # Save to temp file
@@ -221,6 +251,8 @@ async def health_check():
         mps_available=mps_avail,
         gpu_memory=gpu_mem,
         models_loaded=list(model_cache.keys()),
+        align_models_loaded=list(align_model_cache.keys()),
+        diarize_model_loaded='diarize' in diarize_model_cache,
         platform=platform_str
     )
 
@@ -272,10 +304,7 @@ async def transcribe(
         word_segments = None
         if align and segments:
             print("🔄 Aligning words...")
-            align_model, align_metadata = whisperx.load_align_model(
-                language_code=detected_language,
-                device=device
-            )
+            align_model, align_metadata = get_or_load_align_model(detected_language)
             result_aligned = whisperx.align(
                 segments,
                 align_model,
@@ -286,18 +315,12 @@ async def transcribe(
             )
             segments = result_aligned.get("segments", [])
             word_segments = result_aligned.get("word_segments", [])
-            del align_model
-            if device == "cuda":
-                torch.cuda.empty_cache()
         
         # Speaker diarization
         speakers = None
         if speaker_diarization:
             print("🎭 Performing speaker diarization...")
-            diarize_model = whisperx.DiarizationPipeline(
-                model_name="pyannote/speaker-diarization-3.1",
-                device=device
-            )
+            diarize_model = get_or_load_diarize_model()
             diarize_segments = diarize_model(audio_array, min_speakers=min_speakers, max_speakers=max_speakers)
             result_diarized = whisperx.assign_word_speakers(diarize_segments, {"segments": segments})
             segments = result_diarized.get("segments", [])
@@ -339,8 +362,10 @@ async def transcribe_base64(request: TranscriptionRequest):
 @app.delete("/cache", dependencies=[Depends(verify_token)])
 async def clear_cache():
     """Clear model cache to free GPU memory"""
-    global model_cache
+    global model_cache, align_model_cache, diarize_model_cache
     model_cache.clear()
+    align_model_cache.clear()
+    diarize_model_cache.clear()
     if device == "cuda":
         torch.cuda.empty_cache()
     return {"status": "Cache cleared"}

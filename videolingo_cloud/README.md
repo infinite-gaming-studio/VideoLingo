@@ -1,4 +1,4 @@
-# WhisperX Cloud API Server ☁️
+# VideoLingo Cloud API Server ☁️
 
 Standalone WhisperX ASR service for VideoLingo. Deploy on cloud GPU platforms (Google Colab, Kaggle, etc.) or local GPU servers.
 
@@ -105,7 +105,7 @@ python install_conda.py
 
 ### Option 3: Jupyter Notebook (Colab/Kaggle)
 
-Open `WhisperX_Cloud_Unified.ipynb` in Google Colab or Kaggle and run all cells.
+Open `Unified_Cloud_Server.ipynb` in Google Colab or Kaggle and run all cells.
 
 ## 🔧 Configuration
 
@@ -172,23 +172,25 @@ export WHISPERX_CLOUD_URL='https://xxxx.ngrok-free.app'
 ### Method 3: Python Client
 
 ```python
-from whisperx_cloud_client import WhisperXCloudClient
+from videolingo_cloud.videolingo_cloud_client import VideoLingoCloudClient
 
-client = WhisperXCloudClient(base_url='https://xxxx.ngrok-free.app')
+client = VideoLingoCloudClient(base_url='https://xxxx.ngrok-free.app')
 result = client.transcribe('audio.wav', language='zh')
 ```
 
 ## 📁 File Structure
 
 ```
-whisperx_cloud/
+videolingo_cloud/
 ├── environment.yml           # Conda/Mamba environment configuration
 ├── install_conda.py          # Mamba/Conda installation script
 ├── requirements.txt          # Pip dependencies with detailed comments
 ├── step3_install_deps.py     # Automated installation with mamba + wheel support
-├── whisperx_server.py        # FastAPI server implementation
-├── whisperx_cloud_client.py  # Python client for VideoLingo
-├── WhisperX_Cloud_Unified.ipynb  # Universal notebook for Colab/Kaggle
+├── whisperx_server.py        # FastAPI server implementation (ASR)
+├── demucs_server.py          # FastAPI server implementation (Separation)
+├── unified_server.py         # Unified FastAPI server implementation
+├── videolingo_cloud_client.py  # Python client for VideoLingo
+├── Unified_Cloud_Server.ipynb  # Universal notebook for Colab/Kaggle
 └── README.md                 # This file
 ```
 

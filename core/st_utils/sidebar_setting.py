@@ -179,9 +179,8 @@ def page_setting():
         if runtime == "cloud":
             with st.container(border=True):
                 st.write(f"🌐 {t('Cloud Service Settings')}")
-                # Unified cloud_native configuration
-                config_input(t("Unified Cloud Service URL"), "cloud_native.cloud_url", help=t("Unified cloud service URL for WhisperX ASR and Demucs separation"))
-                config_input(t("Unified Authentication Token"), "cloud_native.token", help=t("Unified authentication token for all cloud services"))
+                config_input(t("Cloud Service URL"), "cloud_native.cloud_url", help=t("URL for both WhisperX and Demucs cloud services"))
+                config_input(t("Authentication Token"), "cloud_native.token", help=t("Token for cloud services authentication"))
     with st.expander(t("Dubbing Settings"), expanded=True):
         tts_methods = ["azure_tts", "openai_tts", "fish_tts", "sf_fish_tts", "edge_tts", "gpt_sovits", "custom_tts", "sf_cosyvoice2", "f5tts"]
         select_tts = st.selectbox(t("TTS Method"), options=tts_methods, index=tts_methods.index(load_key("tts_method")))

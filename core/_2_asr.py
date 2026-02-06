@@ -35,7 +35,7 @@ def check_cloud_native_prerequisites():
     
     # Use unified cloud client to get URL
     try:
-        from whisperx_cloud.unified_client import get_cloud_url, check_cloud_connection
+        from videolingo_cloud.videolingo_cloud_client import get_cloud_url, check_cloud_connection
         cloud_url = get_cloud_url()
         
         if not cloud_url:
@@ -53,8 +53,8 @@ def check_cloud_native_prerequisites():
         rprint(f"[green]✅ Cloud Mode: Connected to {cloud_url}[/green]")
     except ImportError:
         raise ImportError(
-            "Cloud Mode requires whisperx_cloud module.\n"
-            "Please ensure whisperx_cloud/ directory is in the project root."
+            "Cloud Mode requires videolingo_cloud module.\n"
+            "Please ensure videolingo_cloud/ directory is in the project root."
         )
     
     return True
