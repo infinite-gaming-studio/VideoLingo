@@ -9,66 +9,91 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 def split_by_mark(nlp):
     whisper_language = load_key("whisper.language")
-    language = load_key("whisper.detected_language") if whisper_language == 'auto' else whisper_language # consider force english case
+    language = load_key("whisper.detected_language") if whisper_language == 'auto' else whisper_language 
     joiner = get_joiner(language)
     rprint(f"[blue]🔍 Using {language} language joiner: '{joiner}'[/blue]")
-    chunks = pd.read_excel("output/log/cleaned_chunks.xlsx")
-    chunks.text = chunks.text.apply(lambda x: x.strip('"').strip(""))
     
-    # join segments of the SAME speaker together, but force split when speaker changes
+    chunks = pd.read_excel("output/log/cleaned_chunks.xlsx")
+    # Clean text and handle speaker_id
+    chunks.text = chunks.text.apply(lambda x: str(x).strip('"').strip(""))
+    chunks['speaker_id'] = chunks['speaker_id'].fillna('None').astype(str)
+    
     sentences_by_mark = []
     
-    # Group continuous chunks by speaker
+    # 1. Group continuous chunks by speaker
     current_speaker = None
-    current_speaker_text = ""
+    group_text = ""
+    group_words_info = [] # List of (char_start, char_end, word_start_time, word_end_time)
     
     for i, row in chunks.iterrows():
-        text = str(row['text']).strip()
-        speaker = row.get('speaker_id', None)
+        text = str(row['text'])
+        speaker = row['speaker_id']
+        start_time = row['start']
+        end_time = row['end']
         
         if speaker != current_speaker:
-            # When speaker changes, process the accumulated text for the previous speaker
-            if current_speaker_text:
-                doc = nlp(current_speaker_text)
-                for sent in doc.sents:
-                    s_text = sent.text.strip()
-                    if s_text:
-                        sentences_by_mark.append({'text': s_text, 'speaker_id': current_speaker})
+            # Process previous group
+            if group_text:
+                process_group(nlp, group_text, group_words_info, current_speaker, sentences_by_mark)
             
-            # Reset for new speaker
+            # Reset for new group
             current_speaker = speaker
-            current_speaker_text = text
+            group_text = text
+            group_words_info = [(0, len(text), start_time, end_time)]
         else:
-            # Same speaker, join with joiner
-            if current_speaker_text:
-                current_speaker_text += joiner + text
-            else:
-                current_speaker_text = text
-                
-    # Process the last speaker's text
-    if current_speaker_text:
-        doc = nlp(current_speaker_text)
-        for sent in doc.sents:
-            s_text = sent.text.strip()
-            if s_text:
-                sentences_by_mark.append({'text': s_text, 'speaker_id': current_speaker})
+            # Same speaker, join
+            group_text += joiner + text
+            # Track character range for this word in the group_text
+            start_char = len(group_text) - len(text)
+            group_words_info.append((start_char, len(group_text), start_time, end_time))
+            
+    # Process last group
+    if group_text:
+        process_group(nlp, group_text, group_words_info, current_speaker, sentences_by_mark)
 
-    # Punctuation merging logic
+    # 2. Punctuation merging logic
     final_sentences = []
     for i, item in enumerate(sentences_by_mark):
-        text = item['text']
-        speaker_id = item['speaker_id']
-        if i > 0 and text.strip() in [',', '.', '，', '。', '？', '！'] and final_sentences:
-            # ! If the current line contains only punctuation, merge it with the previous line
-            final_sentences[-1]['text'] += text.strip()
+        if i > 0 and item['text'].strip() in [',', '.', '，', '。', '？', '！'] and final_sentences:
+            final_sentences[-1]['text'] += item['text'].strip()
+            final_sentences[-1]['end'] = max(final_sentences[-1]['end'], item['end'])
         else:
-            final_sentences.append({'text': text, 'speaker_id': speaker_id})
+            final_sentences.append(item)
 
     # Save to Excel
     df_output = pd.DataFrame(final_sentences)
     df_output.to_excel(SPLIT_BY_MARK_FILE, index=False)
-    
     rprint(f"[green]💾 Sentences split by punctuation marks saved to →  `{SPLIT_BY_MARK_FILE}`[/green]")
+
+def process_group(nlp, group_text, words_info, speaker, results_list):
+    """Split a speaker's text group into sentences and map timestamps."""
+    doc = nlp(group_text)
+    for sent in doc.sents:
+        sent_text = sent.text.strip()
+        if not sent_text:
+            continue
+            
+        sent_start_char = sent.start_char
+        sent_end_char = sent.end_char
+        
+        # Find start and end times by checking which words fall into this sentence range
+        sent_start_time = None
+        sent_end_time = None
+        
+        for w_start, w_end, t_start, t_end in words_info:
+            # If word overlaps significantly with sentence
+            if w_end > sent_start_char and w_start < sent_end_char:
+                if sent_start_time is None or t_start < sent_start_time:
+                    sent_start_time = t_start
+                if sent_end_time is None or t_end > sent_end_time:
+                    sent_end_time = t_end
+                    
+        results_list.append({
+            'text': sent_text,
+            'start': sent_start_time,
+            'end': sent_end_time,
+            'speaker_id': speaker if speaker != 'None' else None
+        })
 
 if __name__ == "__main__":
     nlp = init_nlp()

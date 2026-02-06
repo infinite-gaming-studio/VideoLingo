@@ -105,9 +105,14 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
     df_trans_time = df_translate.copy()
 
     # Process timestamps ⏰
-    time_stamp_list = get_sentence_timestamps(df_text, df_translate)
+    if 'start' in df_trans_time.columns and 'end' in df_trans_time.columns:
+        console.print("[blue]ℹ️ Using pre-calculated timestamps from enriched NLP pipeline.[/blue]")
+        time_stamp_list = list(zip(df_trans_time['start'], df_trans_time['end']))
+    else:
+        time_stamp_list = get_sentence_timestamps(df_text, df_translate)
+        
     df_trans_time['timestamp'] = time_stamp_list
-    df_trans_time['duration'] = df_trans_time['timestamp'].apply(lambda x: x[1] - x[0])
+    df_trans_time['duration'] = df_trans_time.apply(lambda x: x['timestamp'][1] - x['timestamp'][0], axis=1)
 
     # Remove gaps 🕳️
     for i in range(len(df_trans_time)-1):

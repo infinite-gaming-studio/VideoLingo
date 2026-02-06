@@ -28,16 +28,35 @@ def split_long_by_root_main(nlp):
     for _, row in df.iterrows():
         sentence = str(row['text']).strip()
         speaker_id = row['speaker_id']
+        start_time = row['start']
+        end_time = row['end']
+        
         doc = nlp(sentence)
         if len(doc) > 40:
             split_sentences = split_long_sentence(doc)
             if any(len(nlp(sent)) > 40 for sent in split_sentences):
                 split_sentences = [subsent for sent in split_sentences for subsent in split_extremely_long_sentence(nlp(sent))]
+            
+            total_len = sum(len(s) for s in split_sentences)
+            current_start = start_time
+            duration = end_time - start_time
             for s in split_sentences:
-                all_split_sentences.append({'text': s, 'speaker_id': speaker_id})
+                s_duration = (len(s) / total_len) * duration if total_len > 0 else 0
+                all_split_sentences.append({
+                    'text': s,
+                    'start': round(current_start, 3),
+                    'end': round(current_start + s_duration, 3),
+                    'speaker_id': speaker_id
+                })
+                current_start += s_duration
             rprint(f"[yellow]✂️  Splitting long sentences by root: {sentence[:30]}...[/yellow]")
         else:
-            all_split_sentences.append({'text': sentence, 'speaker_id': speaker_id})
+            all_split_sentences.append({
+                'text': sentence, 
+                'start': start_time, 
+                'end': end_time, 
+                'speaker_id': speaker_id
+            })
 
     punctuation = string.punctuation + "'" + '"'  # include all punctuation and apostrophe ' and "
 
@@ -45,13 +64,21 @@ def split_long_by_root_main(nlp):
     for i, item in enumerate(all_split_sentences):
         sentence = item['text']
         speaker_id = item['speaker_id']
+        start_time = item['start']
+        end_time = item['end']
         stripped_sentence = sentence.strip()
         if not stripped_sentence or all(char in punctuation for char in stripped_sentence):
             rprint(f"[yellow]⚠️  Warning: Empty or punctuation-only line detected at index {i}[/yellow]")
             if i > 0:
                 final_results[-1]['text'] += sentence
+                final_results[-1]['end'] = max(final_results[-1]['end'], end_time)
             continue
-        final_results.append({'text': sentence, 'speaker_id': speaker_id})
+        final_results.append({
+            'text': sentence, 
+            'start': start_time, 
+            'end': end_time, 
+            'speaker_id': speaker_id
+        })
 
     df_output = pd.DataFrame(final_results)
     df_output.to_excel(_3_1_SPLIT_BY_NLP, index=False)

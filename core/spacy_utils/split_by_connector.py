@@ -23,9 +23,31 @@ def split_sentences_main(nlp):
     for _, row in df.iterrows():
         sentence = str(row['text']).strip()
         speaker_id = row['speaker_id']
+        start_time = row['start']
+        end_time = row['end']
+        
         split_sentences = split_by_connectors(sentence, nlp = nlp)
-        for s in split_sentences:
-            all_split_sentences.append({'text': s, 'speaker_id': speaker_id})
+        
+        if len(split_sentences) <= 1:
+            all_split_sentences.append({
+                'text': sentence, 
+                'start': start_time, 
+                'end': end_time, 
+                'speaker_id': speaker_id
+            })
+        else:
+            total_len = sum(len(s) for s in split_sentences)
+            current_start = start_time
+            duration = end_time - start_time
+            for s in split_sentences:
+                s_duration = (len(s) / total_len) * duration
+                all_split_sentences.append({
+                    'text': s,
+                    'start': round(current_start, 3),
+                    'end': round(current_start + s_duration, 3),
+                    'speaker_id': speaker_id
+                })
+                current_start += s_duration
     
     df_output = pd.DataFrame(all_split_sentences)
     df_output.to_excel(SPLIT_BY_CONNECTOR_FILE, index=False)

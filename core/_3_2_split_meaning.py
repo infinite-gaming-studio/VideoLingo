@@ -151,9 +151,33 @@ def parallel_split_sentences(sentences_data, max_length, max_workers, nlp, retry
         batch_results = batch_split_sentences(batch, max_length, retry_attempt)
         for idx, split_result in batch_results.items():
             if split_result:
-                split_lines = split_result.strip().split('\n')
-                speaker_id = to_split[next(i for i, x in enumerate(to_split) if x['index'] == idx)]['speaker_id']
-                new_sentences_data[idx] = [{'text': line.strip(), 'speaker_id': speaker_id} for line in split_lines]
+                split_lines = [line.strip() for line in split_result.strip().split('\n') if line.strip()]
+                original_item = next(x for x in to_split if x['index'] == idx)
+                speaker_id = original_item['speaker_id']
+                start_time = original_item['start']
+                end_time = original_item['end']
+                
+                if len(split_lines) <= 1:
+                    new_sentences_data[idx] = [{
+                        'text': split_lines[0] if split_lines else original_item['sentence'], 
+                        'start': start_time, 
+                        'end': end_time, 
+                        'speaker_id': speaker_id
+                    }]
+                else:
+                    total_len = sum(len(line) for line in split_lines)
+                    current_start = start_time
+                    duration = end_time - start_time
+                    new_sentences_data[idx] = []
+                    for line in split_lines:
+                        line_duration = (len(line) / total_len) * duration if total_len > 0 else 0
+                        new_sentences_data[idx].append({
+                            'text': line,
+                            'start': round(current_start, 3),
+                            'end': round(current_start + line_duration, 3),
+                            'speaker_id': speaker_id
+                        })
+                        current_start += line_duration
     
     # Fill in any that failed
     for i in range(len(new_sentences_data)):

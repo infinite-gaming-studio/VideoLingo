@@ -92,7 +92,7 @@ def translate_all():
     results.sort(key=lambda x: x[0])  # Sort results based on original order
     
     # 💾 Save results to lists and Excel file
-    src_text, trans_text, speaker_ids = [], [], []
+    src_text, trans_text, speaker_ids, starts, ends = [], [], [], [], []
     df_source = pd.read_excel(_3_2_SPLIT_BY_MEANING)
     
     # Reconstruct src_text and trans_text from results
@@ -107,13 +107,21 @@ def translate_all():
             # Strip speaker prefix from orig for saving if needed, but we already have df_source
             src_text.append(df_source.iloc[total_lines]['text'])
             speaker_ids.append(df_source.iloc[total_lines]['speaker_id'])
+            starts.append(df_source.iloc[total_lines]['start'])
+            ends.append(df_source.iloc[total_lines]['end'])
             trans_text.append(trans)
             total_lines += 1
     
     # Trim long translation text
     df_text = pd.read_excel(_2_CLEANED_CHUNKS)
     df_text['text'] = df_text['text'].str.strip('"').str.strip()
-    df_translate = pd.DataFrame({'Source': src_text, 'Translation': trans_text, 'speaker_id': speaker_ids})
+    df_translate = pd.DataFrame({
+        'Source': src_text, 
+        'Translation': trans_text, 
+        'speaker_id': speaker_ids,
+        'start': starts,
+        'end': ends
+    })
     subtitle_output_configs = [('trans_subs_for_audio.srt', ['Translation'])]
     df_time = align_timestamp(df_text, df_translate, subtitle_output_configs, output_dir=None, for_display=False)
     
