@@ -5,7 +5,7 @@ Compatible with VideoLingo project
 """
 
 # Server version
-SERVER_VERSION = "1.2.0"
+SERVER_VERSION = "1.3.0"
 
 import os
 import builtins

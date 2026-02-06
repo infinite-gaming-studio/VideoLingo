@@ -68,6 +68,7 @@ python-multipart==0.0.6
 # pyannote.audio==3.1.1
 
 # ======================== Utilities ========================
+rich
 # NumPy - Numerical computing
 # Version pinned for compatibility with other packages
 # Reference: VideoLingo/requirements.txt line 6
