@@ -60,7 +60,7 @@ except ImportError:
     import datetime
     def vprint(*args, **kwargs):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}]", *args, **kwargs)
+        print(f"[{timestamp}]", *args, **kwargs, flush=True)
 
 warnings.filterwarnings("ignore")
 
