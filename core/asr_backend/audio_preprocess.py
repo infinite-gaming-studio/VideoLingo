@@ -87,10 +87,12 @@ def split_audio(audio_file: str, target_len: float = 30*60, win: float = 60) -> 
 def process_transcription(result: Dict) -> pd.DataFrame:
     all_words = []
     for segment in result['segments']:
-        # Get speaker_id, if not exists, set to None
-        speaker_id = segment.get('speaker_id', None)
+        # Get speaker from segment, WhisperX uses 'speaker' key
+        segment_speaker = segment.get('speaker', segment.get('speaker_id', None))
         
         for word in segment['words']:
+            # Use word-level speaker if available, fallback to segment-level
+            speaker_id = word.get('speaker', segment_speaker)
             # Check word length
             if len(word["word"]) > 30:
                 rprint(f"[yellow]⚠️ Warning: Detected word longer than 30 characters, skipping: {word['word']}[/yellow]")

@@ -15,54 +15,43 @@ def split_by_mark(nlp):
     chunks = pd.read_excel("output/log/cleaned_chunks.xlsx")
     chunks.text = chunks.text.apply(lambda x: x.strip('"').strip(""))
     
-    # Calculate character offsets for speaker mapping
-    offsets = []
-    current_offset = 0
-    for text in chunks.text:
-        offsets.append(current_offset)
-        current_offset += len(text) + len(joiner)
-
-    # join with joiner
-    input_text = joiner.join(chunks.text.to_list())
-
-    doc = nlp(input_text)
-    assert doc.has_annotation("SENT_START")
-
-    # skip - and ...
+    # join segments of the SAME speaker together, but force split when speaker changes
     sentences_by_mark = []
-    current_sentence_parts = []
     
-    # iterate all sentences
-    for sent in doc.sents:
-        text = sent.text.strip()
+    # Group continuous chunks by speaker
+    current_speaker = None
+    current_speaker_text = ""
+    
+    for i, row in chunks.iterrows():
+        text = str(row['text']).strip()
+        speaker = row.get('speaker_id', None)
         
-        # Find speaker_id for this sentence part based on its start position in input_text
-        sent_start_offset = sent.start_char
-        chunk_idx = 0
-        while chunk_idx < len(offsets) - 1 and offsets[chunk_idx+1] <= sent_start_offset:
-            chunk_idx += 1
-        speaker_id = chunks.iloc[chunk_idx].get('speaker_id', None)
-
-        # check if the current sentence ends with - or ...
-        if current_sentence_parts and (
-            text.startswith('-') or 
-            text.startswith('...') or
-            current_sentence_parts[-1]['text'].endswith('-') or
-            current_sentence_parts[-1]['text'].endswith('...')
-        ):
-            current_sentence_parts.append({'text': text, 'speaker_id': speaker_id})
+        if speaker != current_speaker:
+            # When speaker changes, process the accumulated text for the previous speaker
+            if current_speaker_text:
+                doc = nlp(current_speaker_text)
+                for sent in doc.sents:
+                    s_text = sent.text.strip()
+                    if s_text:
+                        sentences_by_mark.append({'text': s_text, 'speaker_id': current_speaker})
+            
+            # Reset for new speaker
+            current_speaker = speaker
+            current_speaker_text = text
         else:
-            if current_sentence_parts:
-                combined_text = ' '.join([p['text'] for p in current_sentence_parts])
-                # Use speaker_id of the first part as representative
-                sentences_by_mark.append({'text': combined_text, 'speaker_id': current_sentence_parts[0]['speaker_id']})
-                current_sentence_parts = []
-            current_sentence_parts.append({'text': text, 'speaker_id': speaker_id})
-    
-    # add the last sentence
-    if current_sentence_parts:
-        combined_text = ' '.join([p['text'] for p in current_sentence_parts])
-        sentences_by_mark.append({'text': combined_text, 'speaker_id': current_sentence_parts[0]['speaker_id']})
+            # Same speaker, join with joiner
+            if current_speaker_text:
+                current_speaker_text += joiner + text
+            else:
+                current_speaker_text = text
+                
+    # Process the last speaker's text
+    if current_speaker_text:
+        doc = nlp(current_speaker_text)
+        for sent in doc.sents:
+            s_text = sent.text.strip()
+            if s_text:
+                sentences_by_mark.append({'text': s_text, 'speaker_id': current_speaker})
 
     # Punctuation merging logic
     final_sentences = []
