@@ -10,7 +10,7 @@ Endpoints:
 Deploy on GPU cloud platforms (Colab, Kaggle, etc.)
 """
 
-SERVER_VERSION = "2.3.4"
+SERVER_VERSION = "2.3.5"
 
 import os
 import sys
@@ -47,7 +47,7 @@ sys.modules['torch'].load = _patched_torch_load
 import whisperx
 import librosa
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, HTTPException, APIRouter, Security, Depends
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, APIRouter, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -320,13 +320,13 @@ asr_router = APIRouter(prefix="/asr", tags=["ASR - WhisperX"])
 @asr_router.post("/transcribe", response_model=TranscriptionResponse, dependencies=[Depends(verify_token)])
 async def transcribe(
     audio: UploadFile = File(...),
-    language: Optional[str] = None,
-    model: str = "large-v3",
-    batch_size: Optional[int] = None,
-    align: Union[bool, str] = True,
-    speaker_diarization: Union[bool, str] = False,
-    min_speakers: Optional[int] = None,
-    max_speakers: Optional[int] = None
+    language: Optional[str] = Form(None),
+    model: str = Form("large-v3"),
+    batch_size: Optional[int] = Form(None),
+    align: Union[bool, str] = Form(True),
+    speaker_diarization: Union[bool, str] = Form(False),
+    min_speakers: Optional[int] = Form(None),
+    max_speakers: Optional[int] = Form(None)
 ):
     """Transcribe audio using WhisperX"""
     start_time = time.time()
