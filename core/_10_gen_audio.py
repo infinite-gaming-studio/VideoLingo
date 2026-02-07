@@ -28,22 +28,39 @@ def parse_df_srt_time(time_str: str) -> float:
     return int(hours) * 3600 + int(minutes) * 60 + int(seconds) + int(milliseconds) / 1000
 
 def adjust_audio_speed(input_file: str, output_file: str, speed_factor: float) -> None:
-    """Adjust audio speed and handle edge cases"""
+    """Adjust audio speed with optimized FFmpeg and handle edge cases"""
+    import os
+    cpu_count = os.cpu_count() or 4
+    
     # If the speed factor is close to 1, directly copy the file
     if abs(speed_factor - 1.0) < 0.001:
         shutil.copy2(input_file, output_file)
         return
-        
-    atempo = speed_factor
-    cmd = ['ffmpeg', '-i', input_file, '-filter:a', f'atempo={atempo}', '-y', output_file]
+    
+    # Validate speed factor (atempo supports 0.5 to 2.0)
+    atempo = max(0.5, min(2.0, speed_factor))
+    if atempo != speed_factor:
+        rprint(f"[yellow]⚠️ Speed factor adjusted from {speed_factor} to {atempo} (FFmpeg atempo limit)[/yellow]")
+    
+    # Build optimized FFmpeg command
+    cmd = [
+        'ffmpeg', '-y', '-threads', str(min(4, cpu_count)),
+        '-i', input_file,
+        '-filter:a', f'atempo={atempo}',
+        '-c:a', 'pcm_s16le',  # Use PCM for lossless audio
+        '-ar', '16000', '-ac', '1',
+        output_file
+    ]
+    
     input_duration = get_audio_duration(input_file)
     max_retries = 2
     for attempt in range(max_retries):
         try:
             subprocess.run(cmd, check=True, stderr=subprocess.PIPE)
             output_duration = get_audio_duration(output_file)
-            expected_duration = input_duration / speed_factor
+            expected_duration = input_duration / atempo
             diff = output_duration - expected_duration
+            
             # If the output duration exceeds the expected duration, but the input audio is less than 3 seconds, and the error is within 0.1 seconds, truncate to the expected length
             if output_duration >= expected_duration * 1.02 and input_duration < 3 and diff <= 0.1:
                 audio = AudioSegment.from_wav(output_file)
@@ -52,7 +69,7 @@ def adjust_audio_speed(input_file: str, output_file: str, speed_factor: float) -
                 print(f"✂️ Trimmed to expected duration: {expected_duration:.2f} seconds")
                 return
             elif output_duration >= expected_duration * 1.02:
-                raise Exception(f"Audio duration abnormal: input file={input_file}, output file={output_file}, speed factor={speed_factor}, input duration={input_duration:.2f}s, output duration={output_duration:.2f}s")
+                raise Exception(f"Audio duration abnormal: input file={input_file}, output file={output_file}, speed factor={atempo}, input duration={input_duration:.2f}s, output duration={output_duration:.2f}s")
             return
         except subprocess.CalledProcessError as e:
             if attempt < max_retries - 1:

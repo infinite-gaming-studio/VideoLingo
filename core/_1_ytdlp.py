@@ -24,12 +24,21 @@ def update_ytdlp():
     return YoutubeDL
 
 def download_video_ytdlp(url, save_path='output', resolution='1080'):
+    import os
+    cpu_count = os.cpu_count() or 4
+    
     os.makedirs(save_path, exist_ok=True)
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best' if resolution == 'best' else f'bestvideo[height<={resolution}]+bestaudio/best[height<={resolution}]',
         'outtmpl': f'{save_path}/%(title)s.%(ext)s',
         'noplaylist': True,
         'writethumbnail': True,
+        # Multi-threading downloads
+        'concurrent_fragment_downloads': min(cpu_count * 2, 16),  # Parallel fragment downloads
+        'buffersize': 32768,  # Larger buffer for faster downloads
+        'http_chunk_size': 10485760,  # 10MB chunks for faster HTTP downloads
+        'retries': 10,  # More retries for stability
+        'fragment_retries': 10,
         'postprocessors': [{'key': 'FFmpegThumbnailsConvertor', 'format': 'jpg'}],
     }
 
@@ -40,6 +49,7 @@ def download_video_ytdlp(url, save_path='output', resolution='1080'):
 
     # Get YoutubeDL class after updating
     YoutubeDL = update_ytdlp()
+    rprint(f"[bold blue]🚀 Downloading with {ydl_opts['concurrent_fragment_downloads']} parallel connections...[/bold blue]")
     with YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
     

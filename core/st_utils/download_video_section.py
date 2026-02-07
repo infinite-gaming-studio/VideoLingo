@@ -77,10 +77,22 @@ def download_video_section():
                 return False
 
 def convert_audio_to_video(audio_file: str) -> str:
+    import os
+    cpu_count = os.cpu_count() or 4
     output_video = os.path.join(OUTPUT_DIR, 'black_screen.mp4')
     if not os.path.exists(output_video):
-        print(f"🎵➡️🎬 Converting audio to video with FFmpeg ......")
-        ffmpeg_cmd = ['ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=640x360', '-i', audio_file, '-shortest', '-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p', output_video]
+        print(f"🎵➡️🎬 Converting audio to video with FFmpeg (using {cpu_count} threads)......")
+        ffmpeg_cmd = [
+            'ffmpeg', '-y', '-threads', str(cpu_count),
+            '-f', 'lavfi', '-i', 'color=c=black:s=640x360',
+            '-i', audio_file,
+            '-shortest',
+            '-c:v', 'libx264', '-preset', 'fast', '-tune', 'stillimage',  # Optimize for still image
+            '-c:a', 'aac', '-b:a', '128k',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            output_video
+        ]
         subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True, encoding='utf-8')
         print(f"🎵➡️🎬 Converted <{audio_file}> to <{output_video}> with FFmpeg\n")
         # delete audio file

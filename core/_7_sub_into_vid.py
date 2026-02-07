@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import platform
 from core.utils import *
+from core.utils.ffmpeg_utils import get_cpu_count, run_ffmpeg_with_progress
 
 SRC_FONT_SIZE = 15
 TRANS_FONT_SIZE = 17
@@ -67,40 +68,58 @@ def merge_subtitles_to_video():
     TARGET_HEIGHT = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     video.release()
     rprint(f"[bold green]Video resolution: {TARGET_WIDTH}x{TARGET_HEIGHT}[/bold green]")
-    ffmpeg_cmd = [
-        'ffmpeg', '-i', video_file,
-        '-vf', (
-            f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=decrease,"
-            f"pad={TARGET_WIDTH}:{TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
-            f"subtitles={SRC_SRT}:force_style='FontSize={SRC_FONT_SIZE},FontName={FONT_NAME}," 
-            f"PrimaryColour={SRC_FONT_COLOR},OutlineColour={SRC_OUTLINE_COLOR},OutlineWidth={SRC_OUTLINE_WIDTH},"
-            f"ShadowColour={SRC_SHADOW_COLOR},BorderStyle=1',"
-            f"subtitles={TRANS_SRT}:force_style='FontSize={TRANS_FONT_SIZE},FontName={TRANS_FONT_NAME},"
-            f"PrimaryColour={TRANS_FONT_COLOR},OutlineColour={TRANS_OUTLINE_COLOR},OutlineWidth={TRANS_OUTLINE_WIDTH},"
-            f"BackColour={TRANS_BACK_COLOR},Alignment=2,MarginV=27,BorderStyle=4'"
-        ).encode('utf-8'),
-    ]
 
+    # Get CPU count for optimization
+    cpu_count = get_cpu_count()
+    rprint(f"[bold blue]Using {cpu_count} CPU threads for processing[/bold blue]")
+
+    # Build optimized FFmpeg command
+    ffmpeg_cmd = ['ffmpeg', '-y']
+    
+    # Performance optimizations
+    ffmpeg_cmd.extend(['-threads', str(cpu_count)])
+    
+    # Input
+    ffmpeg_cmd.extend(['-i', video_file])
+    
+    # Video filter with dual subtitles
+    video_filter = (
+        f"scale={TARGET_WIDTH}:{TARGET_HEIGHT}:force_original_aspect_ratio=decrease,"
+        f"pad={TARGET_WIDTH}:{TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2,"
+        f"subtitles={SRC_SRT}:force_style='FontSize={SRC_FONT_SIZE},FontName={FONT_NAME},"
+        f"PrimaryColour={SRC_FONT_COLOR},OutlineColour={SRC_OUTLINE_COLOR},OutlineWidth={SRC_OUTLINE_WIDTH},"
+        f"ShadowColour={SRC_SHADOW_COLOR},BorderStyle=1',"
+        f"subtitles={TRANS_SRT}:force_style='FontSize={TRANS_FONT_SIZE},FontName={TRANS_FONT_NAME},"
+        f"PrimaryColour={TRANS_FONT_COLOR},OutlineColour={TRANS_OUTLINE_COLOR},OutlineWidth={TRANS_OUTLINE_WIDTH},"
+        f"BackColour={TRANS_BACK_COLOR},Alignment=2,MarginV=27,BorderStyle=4'"
+    )
+    ffmpeg_cmd.extend(['-vf', video_filter])
+
+    # Video codec with optimization
     ffmpeg_gpu = load_key("ffmpeg_gpu")
     if ffmpeg_gpu:
-        rprint("[bold green]will use GPU acceleration.[/bold green]")
-        ffmpeg_cmd.extend(['-c:v', 'h264_nvenc'])
-    ffmpeg_cmd.extend(['-y', OUTPUT_VIDEO])
+        rprint("[bold green]Using GPU acceleration (NVENC)...[/bold green]")
+        ffmpeg_cmd.extend(['-c:v', 'h264_nvenc', '-preset', 'fast', '-tune', 'hq'])
+    else:
+        rprint("[bold blue]Using CPU encoding with fast preset...[/bold blue]")
+        ffmpeg_cmd.extend(['-c:v', 'libx264', '-preset', 'fast', '-tune', 'fastdecode'])
+    
+    # Copy audio stream (no re-encoding for speed)
+    ffmpeg_cmd.extend(['-c:a', 'copy'])
+    
+    # Output optimizations for web playback
+    ffmpeg_cmd.extend(['-movflags', '+faststart', '-pix_fmt', 'yuv420p'])
+    
+    # Output file
+    ffmpeg_cmd.append(OUTPUT_VIDEO)
 
     rprint("🎬 Start merging subtitles to video...")
     start_time = time.time()
-    process = subprocess.Popen(ffmpeg_cmd)
-
-    try:
-        process.wait()
-        if process.returncode == 0:
-            rprint(f"\n✅ Done! Time taken: {time.time() - start_time:.2f} seconds")
-        else:
-            rprint("\n❌ FFmpeg execution error")
-    except Exception as e:
-        rprint(f"\n❌ Error occurred: {e}")
-        if process.poll() is None:
-            process.kill()
+    
+    # Run with progress monitoring
+    run_ffmpeg_with_progress(ffmpeg_cmd, "Merging subtitles to video")
+    
+    rprint(f"\n✅ Done! Time taken: {time.time() - start_time:.2f} seconds")
 
 if __name__ == "__main__":
     merge_subtitles_to_video()

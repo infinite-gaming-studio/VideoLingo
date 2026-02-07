@@ -20,12 +20,14 @@ def normalize_audio_volume(audio_path, output_path, target_db = -20.0, format = 
 def convert_video_to_audio(video_file: str):
     os.makedirs(_AUDIO_DIR, exist_ok=True)
     if not os.path.exists(_RAW_AUDIO_FILE):
-        rprint(f"[blue]🎬  ➡️  🎵 Converting to high quality audio with FFmpeg ......[/blue]")
+        cpu_count = os.cpu_count() or 4
+        rprint(f"[blue]🎬  ➡️  🎵 Converting to high quality audio with FFmpeg (using {cpu_count} threads)......[/blue]")
         subprocess.run([
-            'ffmpeg', '-y', '-i', video_file, '-vn',
-            '-c:a', 'libmp3lame', '-b:a', '128k',
+            'ffmpeg', '-y', '-threads', str(cpu_count),
+            '-i', video_file, '-vn',
+            '-c:a', 'libmp3lame', '-b:a', '128k', '-q:a', '2',
             '-ar', '44100',
-            '-ac', '2', 
+            '-ac', '2',
             '-metadata', 'encoding=UTF-8', _RAW_AUDIO_FILE
         ], check=True, stderr=subprocess.PIPE)
         rprint(f"[green]🎬  ➡️  🎵 Converted <{video_file}> to <{_RAW_AUDIO_FILE}> with FFmpeg\n[/green]")

@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import subprocess
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pydub import AudioSegment
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.console import Console
@@ -36,14 +37,17 @@ def get_audio_files(df):
     return audios
 
 def process_audio_segment(audio_file):
-    """Process a single audio segment with MP3 compression"""
+    """Process a single audio segment with MP3 compression using optimized FFmpeg"""
+    import os
+    cpu_count = os.cpu_count() or 4
     temp_file = f"{audio_file}_temp.mp3"
     ffmpeg_cmd = [
-        'ffmpeg', '-y',
+        'ffmpeg', '-y', '-threads', str(min(4, cpu_count)),  # Limit threads per file
         '-i', audio_file,
         '-ar', '16000',
         '-ac', '1',
         '-b:a', '64k',
+        '-c:a', 'libmp3lame', '-q:a', '4',
         temp_file
     ]
     subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -51,7 +55,76 @@ def process_audio_segment(audio_file):
     os.remove(temp_file)
     return audio_segment
 
+def process_audio_segment_optimized(args):
+    """Process audio segment with FFmpeg (for parallel processing)"""
+    audio_file, target_sample_rate = args
+    import os
+    cpu_count = os.cpu_count() or 4
+    temp_file = f"{audio_file}_temp.wav"
+    
+    # Use FFmpeg for fast conversion
+    ffmpeg_cmd = [
+        'ffmpeg', '-y', '-threads', '1',
+        '-i', audio_file,
+        '-ar', str(target_sample_rate),
+        '-ac', '1',
+        '-c:a', 'pcm_s16le',
+        temp_file
+    ]
+    
+    try:
+        subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        audio_segment = AudioSegment.from_wav(temp_file)
+        os.remove(temp_file)
+        return audio_file, audio_segment
+    except Exception as e:
+        console.print(f"[yellow]⚠️ Warning: Failed to process {audio_file}, using pydub fallback: {e}[/yellow]")
+        # Fallback to pydub
+        try:
+            audio = AudioSegment.from_file(audio_file)
+            audio = audio.set_frame_rate(target_sample_rate).set_channels(1)
+            return audio_file, audio
+        except Exception as e2:
+            console.print(f"[red]❌ Error: Failed to load {audio_file}: {e2}[/red]")
+            return audio_file, None
+
 def merge_audio_segments(audios, new_sub_times, sample_rate):
+    """Merge audio segments with parallel processing for better performance"""
+    import os
+    cpu_count = os.cpu_count() or 4
+    max_workers = min(cpu_count, 8)  # Limit max parallel workers
+    
+    console.print(f"[bold blue]🚀 Processing {len(audios)} audio segments with {max_workers} parallel workers...[/bold blue]")
+    
+    # First pass: Process all audio files in parallel
+    processed_segments = {}
+    
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn()) as progress:
+        process_task = progress.add_task("🎵 Processing audio segments...", total=len(audios))
+        
+        # Prepare arguments for parallel processing
+        process_args = [(audio_file, sample_rate) for audio_file in audios if os.path.exists(audio_file)]
+        
+        # Process in parallel using ProcessPoolExecutor
+        if len(process_args) > 1 and max_workers > 1:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(process_audio_segment_optimized, arg): arg[0] for arg in process_args}
+                
+                for future in as_completed(futures):
+                    audio_file, segment = future.result()
+                    if segment is not None:
+                        processed_segments[audio_file] = segment
+                    progress.advance(process_task)
+        else:
+            # Sequential processing for small batches
+            for arg in process_args:
+                audio_file, segment = process_audio_segment_optimized(arg)
+                if segment is not None:
+                    processed_segments[audio_file] = segment
+                progress.advance(process_task)
+    
+    # Second pass: Merge with timeline
+    console.print("[bold blue]🔄 Merging audio segments with timeline...[/bold blue]")
     merged_audio = AudioSegment.silent(duration=0, frame_rate=sample_rate)
     
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn()) as progress:
@@ -62,8 +135,13 @@ def merge_audio_segments(audios, new_sub_times, sample_rate):
                 console.print(f"[bold yellow]⚠️  Warning: File {audio_file} does not exist, skipping...[/bold yellow]")
                 progress.advance(merge_task)
                 continue
-                
-            audio_segment = process_audio_segment(audio_file)
+            
+            # Get pre-processed segment or process on-the-fly
+            if audio_file in processed_segments:
+                audio_segment = processed_segments[audio_file]
+            else:
+                audio_segment = process_audio_segment(audio_file)
+            
             start_time, end_time = time_range
             
             # Add silence segment
