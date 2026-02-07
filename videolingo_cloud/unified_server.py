@@ -10,7 +10,7 @@ Endpoints:
 Deploy on GPU cloud platforms (Colab, Kaggle, etc.)
 """
 
-SERVER_VERSION = "2.3.3"
+SERVER_VERSION = "2.3.4"
 
 import os
 import sys
@@ -332,10 +332,11 @@ async def transcribe(
     start_time = time.time()
     
     # Parse boolean parameters from form data
+    vprint(f"📨 Raw params: align={align!r} (type={type(align).__name__}), speaker_diarization={speaker_diarization!r} (type={type(speaker_diarization).__name__})")
     align = parse_bool(align)
     speaker_diarization = parse_bool(speaker_diarization)
     
-    vprint(f"🔧 Params: align={align}, speaker_diarization={speaker_diarization}, min_speakers={min_speakers}, max_speakers={max_speakers}")
+    vprint(f"🔧 Parsed params: align={align}, speaker_diarization={speaker_diarization}, min_speakers={min_speakers}, max_speakers={max_speakers}")
     
     if batch_size is None:
         if device == "cuda":
