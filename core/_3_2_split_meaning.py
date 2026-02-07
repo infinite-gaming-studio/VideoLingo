@@ -147,6 +147,25 @@ def split_sentences_by_meaning():
         f.write('\n'.join(sentences))
     console.print('[green]✅ All sentences have been successfully split![/green]')
 
+def split_sentence(sentence: str, num_parts: int = 2) -> str:
+    """Split a single sentence into multiple parts by meaning.
+    
+    This is a wrapper function for backward compatibility with _5_split_sub.py
+    """
+    nlp = init_nlp()
+    word_limit = load_key("max_split_length")
+    
+    # Prepare input for batch processing
+    to_split = [{"index": 0, "sentence": sentence, "num_parts": num_parts}]
+    
+    result = batch_split_sentences(to_split, word_limit)
+    
+    if result and 0 in result:
+        return result[0]
+    else:
+        # If splitting fails, return original sentence
+        return sentence
+
 if __name__ == '__main__':
     # print(split_sentence('Which makes no sense to the... average guy who always pushes the character creation slider all the way to the right.', 2, 22))
     split_sentences_by_meaning()

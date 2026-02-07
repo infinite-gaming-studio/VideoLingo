@@ -50,7 +50,8 @@ build_base() {
 # 构建应用镜像
 build_app() {
     log_info "构建应用镜像 (只包含代码，几秒钟)..."
-    docker-compose -f deploy/docker/docker-compose.yml build app
+    # 使用 --no-cache 强制重新构建，确保总是拉取最新代码
+    docker-compose -f deploy/docker/docker-compose.yml build --no-cache app
     log_success "应用镜像构建完成: videolingo:latest"
 }
 
