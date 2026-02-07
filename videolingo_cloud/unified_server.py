@@ -378,9 +378,20 @@ async def transcribe(
             if max_speakers is not None:
                 diarize_kwargs['max_speakers'] = max_speakers
             diarize_segments = diarize_model(audio_array, **diarize_kwargs)
-            result_diarized = whisperx.assign_word_speakers(diarize_segments, {"segments": segments})
+            
+            # Create result dict with word segments for speaker assignment
+            result_for_diarization = {"segments": segments}
+            if word_segments:
+                result_for_diarization["word_segments"] = word_segments
+            
+            result_diarized = whisperx.assign_word_speakers(diarize_segments, result_for_diarization)
             segments = result_diarized.get("segments", [])
             speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in segments if "speaker" in seg))
+            
+            if speakers:
+                vprint(f"✅ Detected speakers: {speakers}")
+            else:
+                vprint("⚠️ No speakers detected")
         
         processing_time = time.time() - start_time
         
