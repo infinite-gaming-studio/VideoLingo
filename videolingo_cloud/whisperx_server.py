@@ -406,6 +406,7 @@ async def transcribe(
                 vprint("   🔗 Assigning speakers to word segments...")
                 result_diarized = whisperx.assign_word_speakers(diarize_segments, result_for_diarization)
                 segments = result_diarized.get("segments", [])
+                word_segments = result_diarized.get("word_segments", word_segments)
 
                 # Debug: Check first few segments for speaker
                 vprint("   📋 Sample segments after assignment (first 5):")

@@ -389,6 +389,7 @@ async def transcribe(
             
             result_diarized = whisperx.assign_word_speakers(diarize_segments, result_for_diarization)
             segments = result_diarized.get("segments", [])
+            word_segments = result_diarized.get("word_segments", word_segments)
             speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in segments if "speaker" in seg))
             
             if speakers:

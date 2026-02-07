@@ -16,6 +16,32 @@ def speaker_configuration_ui():
         
     st.subheader(t("Speaker Voice Configuration"))
     
+    df_aligned = pd.read_excel(_6_ALIGNED_FOR_AUDIO)
+    
+    # Check if speaker_id column exists
+    if 'speaker_id' not in df_aligned.columns:
+        st.warning("⚠️ 角色识别已启用，但未检测到角色信息。请检查音频质量或关闭角色识别。")
+        return True  # No speaker data, continue without speaker configuration
+    
+    unique_speakers = sorted(df_aligned['speaker_id'].dropna().unique())
+    
+    if not unique_speakers:
+        st.warning("⚠️ 未检测到任何角色。请检查音频是否包含多人对话，或关闭角色识别。")
+        return True # No speakers detected
+    
+    # Clean up old mappings if speakers don't match (new video uploaded)
+    existing_mappings = load_speaker_mappings()
+    if existing_mappings:
+        old_speakers = set(existing_mappings.keys())
+        current_speakers = set(unique_speakers)
+        if old_speakers != current_speakers:
+            # Speakers changed, clear old mappings
+            st.info("🔄 检测到新视频，已重置角色语音配置")
+            save_speaker_mappings({})
+            existing_mappings = {}
+            if 'speaker_confirmed' in st.session_state:
+                del st.session_state['speaker_confirmed']
+    
     # Ensure snippets and profiles are ready
     if not os.path.exists(_AUDIO_REFERS_DIR) or not os.listdir(_AUDIO_REFERS_DIR):
         with st.spinner(t("Extracting speaker snippets...")):
@@ -27,13 +53,6 @@ def speaker_configuration_ui():
             st.session_state.speaker_profiles = get_speaker_profiles()
     
     profiles = st.session_state.speaker_profiles
-    existing_mappings = load_speaker_mappings()
-    
-    df_aligned = pd.read_excel(_6_ALIGNED_FOR_AUDIO)
-    unique_speakers = sorted(df_aligned['speaker_id'].dropna().unique())
-    
-    if not unique_speakers:
-        return True # No speakers detected
 
     tts_method = load_key("tts_method")
     voice_options = get_voice_list(tts_method)

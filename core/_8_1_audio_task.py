@@ -107,10 +107,15 @@ def process_srt():
         # 2. Next segment starts soon
         # 3. SAME SPEAKER (Crucial for Diarization!)
         if df.loc[i, 'duration'] < MIN_SUB_DUR:
+            # Handle NaN comparison: pd.isna handles both None and NaN
+            speaker_i = df.loc[i, 'speaker_id']
+            speaker_next = df.loc[i+1, 'speaker_id'] if i < len(df) - 1 else None
+            same_speaker = (pd.isna(speaker_i) and pd.isna(speaker_next)) or (speaker_i == speaker_next)
+            
             can_merge = (
                 i < len(df) - 1 and 
                 time_diff_seconds(df.loc[i, 'start_time'], df.loc[i+1, 'start_time'], today) < MIN_SUB_DUR and
-                df.loc[i, 'speaker_id'] == df.loc[i+1, 'speaker_id']
+                same_speaker
             )
             
             if can_merge:

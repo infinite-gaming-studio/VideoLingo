@@ -42,14 +42,25 @@ def tts_main(text, save_as, number, task_df):
     # Get speaker-specific voice if enabled
     speaker_id = task_df.loc[task_df['number'] == number, 'speaker_id'].values[0] if 'speaker_id' in task_df.columns else None
     
-    # Priority: 1. speaker_mappings.json (from UI) -> 2. speaker_voices (from config)
+    # Priority: 1. speaker_mappings.json (from UI) -> 2. speaker_voices (from config) -> 3. default voice
     from core.utils.speaker_utils import load_speaker_mappings
     mappings = load_speaker_mappings()
-    voice = mappings.get(speaker_id)
+    voice = mappings.get(speaker_id) if speaker_id else None
     
     if not voice:
         speaker_voices = load_key("speaker_voices", {})
-        voice = speaker_voices.get(speaker_id)
+        voice = speaker_voices.get(speaker_id) if speaker_id else None
+    
+    # Fallback to default voice if no speaker-specific voice configured
+    if not voice:
+        voice = load_key("openai_voice") if TTS_METHOD == "openai_tts" else None
+        if not voice and TTS_METHOD == "edge_tts":
+            voice = "zh-CN-XiaoxiaoNeural"  # Default edge voice
+        elif not voice:
+            # Get first available voice as ultimate fallback
+            from core.utils.speaker_utils import get_voice_list
+            voices = get_voice_list(TTS_METHOD)
+            voice = voices[0] if voices else None
 
     max_retries = 3
     for attempt in range(max_retries):

@@ -147,6 +147,13 @@ def save_results(df: pd.DataFrame):
     if removed_rows > 0:
         rprint(f"[blue]ℹ️ Removed {removed_rows} row(s) with empty text.[/blue]")
     
+    # Check if diarization was enabled but no speakers detected
+    if 'speaker_id' in df.columns:
+        non_null_speakers = df['speaker_id'].notna().sum()
+        if non_null_speakers == 0:
+            rprint("[yellow]⚠️ Warning: Diarization enabled but no speakers detected. All speaker_id values are null.[/yellow]")
+            rprint("[yellow]   Tips: Check audio quality, speaker clarity, or disable diarization if not needed.[/yellow]")
+    
     # Check for and remove words longer than 20 characters
     long_words = df[df['text'].str.len() > 30]
     if not long_words.empty:

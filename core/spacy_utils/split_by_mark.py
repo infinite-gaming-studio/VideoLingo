@@ -16,7 +16,9 @@ def split_by_mark(nlp):
     chunks = pd.read_excel("output/log/cleaned_chunks.xlsx")
     # Clean text and handle speaker_id
     chunks.text = chunks.text.apply(lambda x: str(x).strip('"').strip(""))
-    chunks['speaker_id'] = chunks['speaker_id'].fillna('None').astype(str)
+    # Keep None as None, don't convert to string 'None'
+    if 'speaker_id' in chunks.columns:
+        chunks['speaker_id'] = chunks['speaker_id'].where(chunks['speaker_id'].notna(), None)
     
     sentences_by_mark = []
     
