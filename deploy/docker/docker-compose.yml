@@ -21,10 +21,15 @@ services:
     command: echo "Base image built"
 
   # 应用镜像 - 基于基础镜像，只包含代码
+  # 构建参数:
+  #   - BUILD_MODE=dev  : 开发模式，使用本地代码
+  #   - BUILD_MODE=prod : 生产模式，从GitHub克隆
   app:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile.app
+      args:
+        - BUILD_MODE=${BUILD_MODE:-dev}
     image: videolingo:latest
     container_name: videolingo-app
     restart: unless-stopped
