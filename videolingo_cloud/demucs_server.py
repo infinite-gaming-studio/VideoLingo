@@ -4,10 +4,9 @@ Deploy Demucs vocal separation as a standalone service on GPU cloud platforms (C
 Compatible with VideoLingo project
 """
 
-# Server version
-SERVER_VERSION = "1.1.0"
-
 import os
+
+from _version import SERVER_VERSION
 import io
 import base64
 import tempfile

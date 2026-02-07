@@ -4,10 +4,9 @@ Deploy whisperX as a standalone service on GPU cloud platforms (Colab, Kaggle, e
 Compatible with VideoLingo project
 """
 
-# Server version
-SERVER_VERSION = "1.3.0"
-
 import os
+
+from _version import SERVER_VERSION
 import builtins
 # Set matplotlib backend to Agg before importing any matplotlib-dependent libraries
 os.environ['MPLBACKEND'] = 'Agg'

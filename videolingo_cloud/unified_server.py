@@ -10,7 +10,7 @@ Endpoints:
 Deploy on GPU cloud platforms (Colab, Kaggle, etc.)
 """
 
-SERVER_VERSION = "2.3.5"
+from _version import SERVER_VERSION
 
 import os
 import sys
