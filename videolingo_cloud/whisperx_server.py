@@ -389,38 +389,37 @@ async def transcribe(
         speakers = None
         if speaker_diarization:
             vprint("🎭 Performing speaker diarization...")
-<<<<<<< HEAD
             try:
                 diarize_model = get_or_load_diarize_model()
                 diarize_segments = diarize_model(audio_array, min_speakers=min_speakers, max_speakers=max_speakers)
-            diarize_model = get_or_load_diarize_model()
-            diarize_segments = diarize_model(audio_array, min_speakers=min_speakers, max_speakers=max_speakers)
-            
-            vprint(f"   ✅ Diarization complete: {len(diarize_segments)} speaker segments")
-            vprint(f"   📊 Sample diarize segments (first 3):")
-            for i, seg in enumerate(diarize_segments[:3]):
-                vprint(f"      [{i}] {seg.get('start', 0):.2f}s - {seg.get('end', 0):.2f}s | Speaker: {seg.get('speaker', 'N/A')}")
-            
-            # Create result dict with word segments for speaker assignment
-            result_for_diarization = {"segments": segments}
-            if word_segments:
-                result_for_diarization["word_segments"] = word_segments
-            
-            vprint("   🔗 Assigning speakers to word segments...")
-            result_diarized = whisperx.assign_word_speakers(diarize_segments, result_for_diarization)
-            segments = result_diarized.get("segments", [])
+                
+                vprint(f"   ✅ Diarization complete: {len(diarize_segments)} speaker segments")
+                vprint(f"   📊 Sample diarize segments (first 3):")
+                for i, seg in enumerate(diarize_segments[:3]):
+                    vprint(f"      [{i}] {seg.get('start', 0):.2f}s - {seg.get('end', 0):.2f}s | Speaker: {seg.get('speaker', 'N/A')}")
+                
+                # Create result dict with word segments for speaker assignment
+                result_for_diarization = {"segments": segments}
+                if word_segments:
+                    result_for_diarization["word_segments"] = word_segments
+                
+                vprint("   🔗 Assigning speakers to word segments...")
+                result_diarized = whisperx.assign_word_speakers(diarize_segments, result_for_diarization)
+                segments = result_diarized.get("segments", [])
 
-            # Debug: Check first few segments for speaker
-            vprint("   📋 Sample segments after assignment (first 5):")
-            for i, seg in enumerate(segments[:5]):
-                speaker = seg.get('speaker', 'NOT_SET')
-                text_preview = seg.get('text', '')[:30] + '...' if len(seg.get('text', '')) > 30 else seg.get('text', '')
-                vprint(f"      [{i}] {seg.get('start', 0):.2f}s - {seg.get('end', 0):.2f}s | Speaker: {speaker} | Text: {text_preview}")
+                # Debug: Check first few segments for speaker
+                vprint("   📋 Sample segments after assignment (first 5):")
+                for i, seg in enumerate(segments[:5]):
+                    speaker = seg.get('speaker', 'NOT_SET')
+                    text_preview = seg.get('text', '')[:30] + '...' if len(seg.get('text', '')) > 30 else seg.get('text', '')
+                    vprint(f"      [{i}] {seg.get('start', 0):.2f}s - {seg.get('end', 0):.2f}s | Speaker: {speaker} | Text: {text_preview}")
 
-            speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in segments if "speaker" in seg and seg.get("speaker")))
-            vprint(f"   👥 Unique speakers found: {speakers}")
-        
->>>>>>> main
+                speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in segments if "speaker" in seg and seg.get("speaker")))
+                vprint(f"   👥 Unique speakers found: {speakers}")
+            except Exception as e:
+                vprint(f"   ❌ Diarization failed: {str(e)}")
+                import traceback
+                vprint(f"   📄 Traceback: {traceback.format_exc()}")
         processing_time = time.time() - start_time
 
         # 📝 Print response summary
