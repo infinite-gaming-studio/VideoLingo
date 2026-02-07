@@ -33,19 +33,34 @@ whisper:
   
   # ElevenLabs API key
   elevenlabs_api_key: ''
+  
+  # 说话人分离 (Speaker Diarization) - 仅支持 cloud 模式
+  # 需要部署云端服务并配置 HF_TOKEN
+  diarization: false
+  
+  # 最小说话人数 (可选, 用于指导 diarization 模型)
+  min_speakers: 
+  
+  # 最大说话人数 (可选, 用于指导 diarization 模型)
+  max_speakers:
+
+# ==================== 云端服务配置 ====================
+# 用于 cloud 模式的 Whisper 和 Demucs 服务
+# 部署 videolingo_cloud/Unified_Cloud_Server.ipynb 到 GPU 服务器 (Colab/Kaggle)
+cloud_native:
+  # 云端服务 URL (ngrok 或其他反向代理地址)
+  cloud_url: 'YOUR_CLOUD_URL_HERE'
+  
+  # 访问令牌 (设置和服务端一致的 VIDEOLINGO_CLOUD_TOKEN)
+  token: 'YOUR_TOKEN_HERE'
 
 # ==================== 人声分离配置 ====================
 # Demucs 人声分离 (分离人声和背景音乐)
 # 
 # 运行模式:
 # - local: 本地运行 (需要安装 demucs 包, Apple Silicon CPU 模式较慢)
-# - cloud: 使用云端服务 (推荐, 更快且节省本地资源)
+# - cloud: 使用云端服务 (推荐, 更快且节省本地资源, 使用上面的 cloud_native 配置)
 # - false: 关闭人声分离
-#
-# 云端模式配置:
-# 1. 部署 videolingo_cloud/Unified_Cloud_Server.ipynb 到 GPU 服务器 (Colab/Kaggle)
-# 2. 将服务 URL 配置到 cloud_native.cloud_url (统一服务, 无需单独配置 demucs)
-# 3. 设置 demucs: 'cloud'
 #
 demucs: 'cloud'
 
@@ -66,6 +81,14 @@ ffmpeg_gpu: false
 # - gpt_sovits_tts: GPT-SoVITS (需要本地部署)
 # - custom_tts: 自定义TTS
 tts_method: 'edge_tts'
+
+# 说话人声音映射 (当启用说话人分离时使用)
+# 可以在 Speaker Hub UI 中配置，或在这里手动设置
+# 优先级: UI 配置 > 此配置
+speaker_voices:
+  SPEAKER_00: 'zh-CN-XiaoxiaoNeural'  # 说话人 0 的声音
+  SPEAKER_01: 'zh-CN-YunxiNeural'     # 说话人 1 的声音
+  # SPEAKER_02: 'zh-CN-XiaoyiNeural'  # 根据需要添加更多说话人
 
 # ==================== 模型目录配置 ====================
 # 模型缓存目录 (Docker 容器中路径)
