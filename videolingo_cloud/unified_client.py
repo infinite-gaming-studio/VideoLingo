@@ -109,6 +109,8 @@ def transcribe_audio_cloud(
     start: float,
     end: float,
     cloud_url: str = None,
+    language: str = None,
+    model: str = "large-v3",
     align: bool = True,
     speaker_diarization: bool = False,
     min_speakers: Optional[int] = None,
