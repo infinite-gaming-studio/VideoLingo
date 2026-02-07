@@ -23,7 +23,7 @@ import base64
 import tempfile
 import warnings
 import time
-from typing import Optional
+from typing import Optional, Union, Any
 from contextlib import asynccontextmanager
 
 import torch
@@ -96,6 +96,15 @@ def get_device():
         return "mps", "float16"
     else:
         return "cpu", "int8"
+
+# Helper function to parse boolean from form data
+def parse_bool(value: Any) -> bool:
+    """Parse boolean value from form data (string or bool)"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ('true', '1', 'yes', 'on')
+    return bool(value)
 
 class TranscriptionRequest(BaseModel):
     language: Optional[str] = Field(default=None, description="Language code (e.g., 'en', 'zh', 'ja'). Auto-detect if not provided")
@@ -276,8 +285,8 @@ async def transcribe(
     batch_size: Optional[int] = None,
     vad_onset: float = 0.500,
     vad_offset: float = 0.363,
-    align: bool = True,
-    speaker_diarization: bool = False,
+    align: Union[bool, str] = True,
+    speaker_diarization: Union[bool, str] = False,
     min_speakers: Optional[int] = None,
     max_speakers: Optional[int] = None
 ):
@@ -287,6 +296,10 @@ async def transcribe(
     Returns word-level timestamps compatible with VideoLingo format
     """
     start_time = time.time()
+    
+    # Parse boolean parameters from form data
+    align = parse_bool(align)
+    speaker_diarization = parse_bool(speaker_diarization)
     
     # Determine batch size based on device
     if batch_size is None:

@@ -10,7 +10,7 @@ Endpoints:
 Deploy on GPU cloud platforms (Colab, Kaggle, etc.)
 """
 
-SERVER_VERSION = "2.3.0"
+SERVER_VERSION = "2.3.1"
 
 import os
 import sys
@@ -30,7 +30,7 @@ import base64
 import tempfile
 import warnings
 import time
-from typing import Optional
+from typing import Optional, Union, Any
 from contextlib import asynccontextmanager
 
 import torch
@@ -120,6 +120,15 @@ class TranscriptionRequest(BaseModel):
     speaker_diarization: bool = Field(default=False)
     min_speakers: Optional[int] = None
     max_speakers: Optional[int] = None
+
+# Helper function to parse boolean from form data
+def parse_bool(value: Any) -> bool:
+    """Parse boolean value from form data (string or bool)"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ('true', '1', 'yes', 'on')
+    return bool(value)
 
 class TranscriptionResponse(BaseModel):
     success: bool
@@ -314,11 +323,17 @@ async def transcribe(
     language: Optional[str] = None,
     model: str = "large-v3",
     batch_size: Optional[int] = None,
-    align: bool = True,
-    speaker_diarization: bool = False
+    align: Union[bool, str] = True,
+    speaker_diarization: Union[bool, str] = False,
+    min_speakers: Optional[int] = None,
+    max_speakers: Optional[int] = None
 ):
     """Transcribe audio using WhisperX"""
     start_time = time.time()
+    
+    # Parse boolean parameters from form data
+    align = parse_bool(align)
+    speaker_diarization = parse_bool(speaker_diarization)
     
     if batch_size is None:
         if device == "cuda":
@@ -357,7 +372,12 @@ async def transcribe(
         if speaker_diarization:
             vprint("🎭 Speaker diarization...")
             diarize_model = get_or_load_diarize_model()
-            diarize_segments = diarize_model(audio_array)
+            diarize_kwargs = {}
+            if min_speakers is not None:
+                diarize_kwargs['min_speakers'] = min_speakers
+            if max_speakers is not None:
+                diarize_kwargs['max_speakers'] = max_speakers
+            diarize_segments = diarize_model(audio_array, **diarize_kwargs)
             result_diarized = whisperx.assign_word_speakers(diarize_segments, {"segments": segments})
             segments = result_diarized.get("segments", [])
             speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in segments if "speaker" in seg))
