@@ -48,7 +48,19 @@ def download_video_section():
             uploaded_file = st.file_uploader(t("Or upload video"), type=load_key("allowed_video_formats") + load_key("allowed_audio_formats"))
             if uploaded_file:
                 if os.path.exists(OUTPUT_DIR):
-                    shutil.rmtree(OUTPUT_DIR)
+                    try:
+                        shutil.rmtree(OUTPUT_DIR)
+                    except OSError:
+                        # If directory is busy (e.g., mount point), clear contents instead
+                        for item in os.listdir(OUTPUT_DIR):
+                            item_path = os.path.join(OUTPUT_DIR, item)
+                            try:
+                                if os.path.isfile(item_path):
+                                    os.remove(item_path)
+                                elif os.path.isdir(item_path):
+                                    shutil.rmtree(item_path)
+                            except Exception:
+                                pass
                 os.makedirs(OUTPUT_DIR, exist_ok=True)
                 
                 raw_name = uploaded_file.name.replace(' ', '_')

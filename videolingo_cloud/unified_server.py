@@ -10,7 +10,7 @@ Endpoints:
 Deploy on GPU cloud platforms (Colab, Kaggle, etc.)
 """
 
-SERVER_VERSION = "2.3.0"
+SERVER_VERSION = "2.3.5"
 
 import os
 import sys
@@ -30,7 +30,7 @@ import base64
 import tempfile
 import warnings
 import time
-from typing import Optional
+from typing import Optional, Union, Any
 from contextlib import asynccontextmanager
 
 import torch
@@ -47,7 +47,7 @@ sys.modules['torch'].load = _patched_torch_load
 import whisperx
 import librosa
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, HTTPException, APIRouter, Security, Depends
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, APIRouter, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -120,6 +120,15 @@ class TranscriptionRequest(BaseModel):
     speaker_diarization: bool = Field(default=False)
     min_speakers: Optional[int] = None
     max_speakers: Optional[int] = None
+
+# Helper function to parse boolean from form data
+def parse_bool(value: Any) -> bool:
+    """Parse boolean value from form data (string or bool)"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ('true', '1', 'yes', 'on')
+    return bool(value)
 
 class TranscriptionResponse(BaseModel):
     success: bool
@@ -311,16 +320,23 @@ asr_router = APIRouter(prefix="/asr", tags=["ASR - WhisperX"])
 @asr_router.post("/transcribe", response_model=TranscriptionResponse, dependencies=[Depends(verify_token)])
 async def transcribe(
     audio: UploadFile = File(...),
-    language: Optional[str] = None,
-    model: str = "large-v3",
-    batch_size: Optional[int] = None,
-    align: bool = True,
-    speaker_diarization: bool = False,
-    min_speakers: Optional[int] = None,
-    max_speakers: Optional[int] = None
+    language: Optional[str] = Form(None),
+    model: str = Form("large-v3"),
+    batch_size: Optional[int] = Form(None),
+    align: Union[bool, str] = Form(True),
+    speaker_diarization: Union[bool, str] = Form(False),
+    min_speakers: Optional[int] = Form(None),
+    max_speakers: Optional[int] = Form(None)
 ):
     """Transcribe audio using WhisperX"""
     start_time = time.time()
+    
+    # Parse boolean parameters from form data
+    vprint(f"📨 Raw params: align={align!r} (type={type(align).__name__}), speaker_diarization={speaker_diarization!r} (type={type(speaker_diarization).__name__})")
+    align = parse_bool(align)
+    speaker_diarization = parse_bool(speaker_diarization)
+    
+    vprint(f"🔧 Parsed params: align={align}, speaker_diarization={speaker_diarization}, min_speakers={min_speakers}, max_speakers={max_speakers}")
     
     if batch_size is None:
         if device == "cuda":
@@ -359,10 +375,26 @@ async def transcribe(
         if speaker_diarization:
             vprint("🎭 Speaker diarization...")
             diarize_model = get_or_load_diarize_model()
-            diarize_segments = diarize_model(audio_array, min_speakers=min_speakers, max_speakers=max_speakers)
-            result_diarized = whisperx.assign_word_speakers(diarize_segments, {"segments": segments})
+            diarize_kwargs = {}
+            if min_speakers is not None:
+                diarize_kwargs['min_speakers'] = min_speakers
+            if max_speakers is not None:
+                diarize_kwargs['max_speakers'] = max_speakers
+            diarize_segments = diarize_model(audio_array, **diarize_kwargs)
+            
+            # Create result dict with word segments for speaker assignment
+            result_for_diarization = {"segments": segments}
+            if word_segments:
+                result_for_diarization["word_segments"] = word_segments
+            
+            result_diarized = whisperx.assign_word_speakers(diarize_segments, result_for_diarization)
             segments = result_diarized.get("segments", [])
             speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in segments if "speaker" in seg))
+            
+            if speakers:
+                vprint(f"✅ Detected speakers: {speakers}")
+            else:
+                vprint("⚠️ No speakers detected")
         
         processing_time = time.time() - start_time
         
