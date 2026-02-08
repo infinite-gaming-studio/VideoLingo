@@ -57,7 +57,9 @@ def show_difference(str1, str2):
     print(f"Difference indices: {diff_positions}")
 
 def get_sentence_timestamps(df_words, df_sentences):
+    """Get timestamps and speaker_id for each sentence by matching words."""
     time_stamp_list = []
+    speaker_id_list = []
     
     # Build complete string and position mapping
     full_words_str = ''
@@ -86,6 +88,18 @@ def get_sentence_timestamps(df_words, df_sentences):
                     float(df_words['end'][end_word_idx])
                 ))
                 
+                # Get speaker_id for this sentence (use most frequent speaker in the word range)
+                if 'speaker_id' in df_words.columns:
+                    speaker_ids = df_words.iloc[start_word_idx:end_word_idx+1]['speaker_id']
+                    # Get the most frequent non-null speaker_id
+                    non_null_speakers = speaker_ids.dropna()
+                    if len(non_null_speakers) > 0:
+                        speaker_id_list.append(non_null_speakers.mode().iloc[0])
+                    else:
+                        speaker_id_list.append(None)
+                else:
+                    speaker_id_list.append(None)
+                
                 current_pos += sentence_len
                 match_found = True
                 break
@@ -98,7 +112,7 @@ def get_sentence_timestamps(df_words, df_sentences):
             print("\nOriginal sentence:", df_sentences['Source'][idx])
             raise ValueError("❎ No match found for sentence.")
     
-    return time_stamp_list
+    return time_stamp_list, speaker_id_list
 
 def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output_dir: str, for_display: bool = True):
     """Align timestamps and add a new timestamp column to df_translate"""
@@ -108,8 +122,19 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
     if 'start' in df_trans_time.columns and 'end' in df_trans_time.columns:
         console.print("[blue]ℹ️ Using pre-calculated timestamps from enriched NLP pipeline.[/blue]")
         time_stamp_list = list(zip(df_trans_time['start'], df_trans_time['end']))
+        # Try to get speaker_id from df_text if available
+        if 'speaker_id' in df_text.columns and 'speaker_id' not in df_trans_time.columns:
+            speaker_id_list = []
+            for idx in range(len(df_trans_time)):
+                # Match by index if lengths match, otherwise leave as None
+                if idx < len(df_text):
+                    speaker_id_list.append(df_text.iloc[idx].get('speaker_id', None))
+                else:
+                    speaker_id_list.append(None)
+            df_trans_time['speaker_id'] = speaker_id_list
     else:
-        time_stamp_list = get_sentence_timestamps(df_text, df_translate)
+        time_stamp_list, speaker_id_list = get_sentence_timestamps(df_text, df_translate)
+        df_trans_time['speaker_id'] = speaker_id_list
         
     df_trans_time['timestamp'] = time_stamp_list
     df_trans_time['duration'] = df_trans_time.apply(lambda x: x['timestamp'][1] - x['timestamp'][0], axis=1)
