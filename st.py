@@ -8,6 +8,23 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 os.environ['PATH'] += os.pathsep + current_dir
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# 获取版本号 / Get version
+def get_version():
+    """Get VideoLingo version from environment or version file"""
+    # First try environment variable (set by Docker)
+    version = os.environ.get('VIDEOLINGO_VERSION', '')
+    if version:
+        return version
+    
+    # Fallback to reading from version file
+    try:
+        from videolingo_cloud._version import __version__
+        return __version__
+    except:
+        return "dev"
+
+VIDEOLINGO_VERSION = get_version()
+
 st.set_page_config(page_title="VideoLingo", page_icon="docs/logo.svg")
 
 SUB_VIDEO = "output/output_sub.mp4"
@@ -112,6 +129,9 @@ def process_audio():
     st.balloons()
 
 def main():
+    # Log version on startup
+    print(f"🚀 VideoLingo v{VIDEOLINGO_VERSION} starting...")
+    
     logo_col, _ = st.columns([1,1])
     with logo_col:
         st.image("docs/logo.png", use_column_width=True)
@@ -122,6 +142,9 @@ def main():
     with st.sidebar:
         page_setting()
         st.markdown(give_star_button, unsafe_allow_html=True)
+        # Display version at bottom of sidebar
+        st.divider()
+        st.caption(f"📦 VideoLingo v{VIDEOLINGO_VERSION}")
     download_video_section()
     text_processing_section()
     audio_processing_section()
