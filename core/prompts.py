@@ -262,6 +262,12 @@ def get_prompt_expressiveness(faithfulness_result, lines_with_ids, shared_prompt
     """
     TARGET_LANGUAGE = load_key("target_language")
     
+    # Build input text from lines_with_ids
+    input_lines = []
+    for item in lines_with_ids:
+        input_lines.append(item['labeled_text'])
+    input_text = "\n".join(input_lines)
+    
     # Build JSON format preserving IDs
     json_format = {}
     for key, value in faithfulness_result.items():
@@ -310,7 +316,7 @@ Please use a two-step thinking process to handle the text line by line:
    
 ## INPUT
 <subtitles>
-{lines}
+{input_text}
 </subtitles>
 
 ## Output in only JSON format and no other text
