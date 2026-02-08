@@ -35,12 +35,20 @@ from datetime import datetime
 
 import torch
 
-# Monkey patch torch.load to fix PyTorch 2.6+ weights_only issue
-# This is needed because pyannote.audio uses torch.load internally
+# Fix PyTorch 2.6+ weights_only issue for pyannote models
+# This is needed because pyannote.audio uses omegaconf which is not in default safe globals
+try:
+    # Add omegaconf types to safe globals for torch.load
+    from omegaconf import ListConfig, DictConfig
+    torch.serialization.add_safe_globals([ListConfig, DictConfig])
+except Exception:
+    pass  # omegaconf might not be installed or add_safe_globals not available
+
+# Monkey patch torch.load as fallback for any other unpickling issues
 _original_torch_load = torch.load
 def _patched_torch_load(*args, **kwargs):
-    if 'weights_only' not in kwargs:
-        kwargs['weights_only'] = False
+    # Force weights_only=False for compatibility with older model files
+    kwargs['weights_only'] = False
     return _original_torch_load(*args, **kwargs)
 torch.load = _patched_torch_load
 
