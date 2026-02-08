@@ -26,10 +26,18 @@ RUN if [ "$BUILD_MODE" = "dev" ]; then \
 # 开发模式下复制本地代码 / Copy local code in dev mode
 COPY . .
 
-# 读取版本号并设置为环境变量 / Read version and set as environment variable
-RUN VERSION=$(python3 -c "import sys; sys.path.insert(0, '.'); from videolingo_cloud._version import __version__; print(__version__)" 2>/dev/null || echo "unknown") && \
-    echo "Building VideoLingo version: $VERSION" && \
-    echo "export VIDEOLINGO_VERSION=$VERSION" >> /etc/profile.d/videolingo.sh
+# 读取版本号 / Read version from file
+RUN grep -E "^__version__\s*=" videolingo_cloud/_version.py | sed 's/.*"\(.*\)".*/\1/' > /tmp/version.txt
+
+# 构建参数：版本号 / Build argument: version
+ARG VIDEOLINGO_VERSION=""
+
+# 设置版本号环境变量 / Set version environment variable
+# 优先使用构建参数，否则从文件读取
+ENV VIDEOLINGO_VERSION=${VIDEOLINGO_VERSION:-$(cat /tmp/version.txt)}
+
+# 打印构建信息 / Print build info
+RUN echo "Building VideoLingo version: $(cat /tmp/version.txt)"
 
 # 环境变量配置 / Environment variables
 ENV ANTHROPIC_API_KEY="" 
@@ -40,7 +48,6 @@ ENV STREAMLIT_SERVER_HEADLESS=true
 ENV STREAMLIT_SERVER_ENABLE_CORS=false
 ENV STREAMLIT_SERVER_MAX_UPLOAD_SIZE=2000
 ENV CLOUD_NATIVE_MODE=true
-ENV VIDEOLINGO_VERSION=""
 
 # 暴露端口 / Expose port
 EXPOSE 8501

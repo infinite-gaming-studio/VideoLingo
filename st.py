@@ -13,15 +13,28 @@ def get_version():
     """Get VideoLingo version from environment or version file"""
     # First try environment variable (set by Docker)
     version = os.environ.get('VIDEOLINGO_VERSION', '')
-    if version:
+    if version and version != '$(cat /tmp/version.txt)':
         return version
     
-    # Fallback to reading from version file
+    # Fallback 1: Try to read from version file directly
+    try:
+        version_file = os.path.join(current_dir, 'videolingo_cloud', '_version.py')
+        if os.path.exists(version_file):
+            with open(version_file, 'r') as f:
+                for line in f:
+                    if line.startswith('__version__'):
+                        return line.split('=')[1].strip().strip('"').strip("'")
+    except:
+        pass
+    
+    # Fallback 2: Try importing
     try:
         from videolingo_cloud._version import __version__
         return __version__
     except:
-        return "dev"
+        pass
+    
+    return "dev"
 
 VIDEOLINGO_VERSION = get_version()
 
