@@ -1,4 +1,4 @@
-fimport pandas as pd
+import pandas as pd
 from typing import List, Tuple
 import concurrent.futures
 
@@ -64,7 +64,7 @@ def align_subs(src_sub: str, tr_sub: str, src_part: str) -> Tuple[List[str], Lis
     
     return src_parts, tr_parts, tr_remerged
 
-def split_align_subs(src_lines: List[str], tr_lines: List[str]):
+def split_align_subs(src_lines: List[str], tr_lines: List[str], speaker_ids: List[str] = None):
     subtitle_set = load_key("subtitle")
     MAX_SUB_LENGTH = subtitle_set["max_length"]
     TARGET_SUB_MULTIPLIER = subtitle_set["target_multiplier"]
@@ -100,11 +100,22 @@ def split_align_subs(src_lines: List[str], tr_lines: List[str]):
     with concurrent.futures.ThreadPoolExecutor(max_workers=load_key("max_workers")) as executor:
         executor.map(process, to_split)
     
-    # Flatten `src_lines` and `tr_lines`
-    src_lines = [item for sublist in src_lines for item in (sublist if isinstance(sublist, list) else [sublist])]
-    tr_lines = [item for sublist in tr_lines for item in (sublist if isinstance(sublist, list) else [sublist])]
+    # Flatten `src_lines` and `tr_lines`, tracking speaker_ids
+    new_src_lines = []
+    new_tr_lines = []
+    new_speaker_ids = [] if speaker_ids is not None else None
     
-    return src_lines, tr_lines, remerged_tr_lines
+    for i, sublist in enumerate(src_lines):
+        items = sublist if isinstance(sublist, list) else [sublist]
+        new_src_lines.extend(items)
+        if speaker_ids is not None:
+            new_speaker_ids.extend([speaker_ids[i]] * len(items))
+    
+    for sublist in tr_lines:
+        items = sublist if isinstance(sublist, list) else [sublist]
+        new_tr_lines.extend(items)
+    
+    return new_src_lines, new_tr_lines, remerged_tr_lines, new_speaker_ids
 
 def split_for_sub_main():
     console.print("[bold green]🚀 Start splitting subtitles...[/bold green]")
@@ -112,6 +123,7 @@ def split_for_sub_main():
     df = pd.read_excel(_4_2_TRANSLATION)
     src = df['Source'].tolist()
     trans = df['Translation'].tolist()
+    speaker_ids = df['speaker_id'].tolist() if 'speaker_id' in df.columns else None
     
     subtitle_set = load_key("subtitle")
     MAX_SUB_LENGTH = subtitle_set["max_length"]
@@ -119,24 +131,25 @@ def split_for_sub_main():
     
     for attempt in range(3):  # 多次切割
         console.print(Panel(f"🔄 Split attempt {attempt + 1}", expand=False))
-        split_src, split_trans, remerged = split_align_subs(src.copy(), trans)
+        split_src, split_trans, remerged, split_speaker_ids = split_align_subs(src.copy(), trans.copy(), speaker_ids.copy() if speaker_ids else None)
         
         # 检查是否所有字幕都符合长度要求
-        if all(len(src) <= MAX_SUB_LENGTH for src in split_src) and \
+        if all(len(s) <= MAX_SUB_LENGTH for s in split_src) and \
            all(calc_len(tr) * TARGET_SUB_MULTIPLIER <= MAX_SUB_LENGTH for tr in split_trans):
             break
         
         # 更新源数据继续下一轮分割
-        src, trans = split_src, split_trans
+        src, trans, speaker_ids = split_src, split_trans, split_speaker_ids
 
     # 循环结束后，src 和 trans 已经是最终的分割结果
     # 但由于 split_align_subs 内部可能对某些行进行了分割（变成列表），
     # 需要调用最后一次来确保所有数据都被展平
-    split_src, split_trans, remerged = split_align_subs(src.copy(), trans.copy())
+    split_src, split_trans, remerged, split_speaker_ids = split_align_subs(src.copy(), trans.copy(), speaker_ids.copy() if speaker_ids else None)
     
     # 确保二者有相同的长度，防止报错
-    min_len = min(len(split_src), len(split_trans), len(remerged))
     max_len = max(len(split_src), len(split_trans), len(remerged))
+    if split_speaker_ids:
+        max_len = max(max_len, len(split_speaker_ids))
     
     if len(split_src) < max_len:
         split_src += [""] * (max_len - len(split_src))
@@ -144,9 +157,16 @@ def split_for_sub_main():
         split_trans += [""] * (max_len - len(split_trans))
     if len(remerged) < max_len:
         remerged += [""] * (max_len - len(remerged))
+    if split_speaker_ids and len(split_speaker_ids) < max_len:
+        split_speaker_ids += [None] * (max_len - len(split_speaker_ids))
     
-    pd.DataFrame({'Source': split_src, 'Translation': split_trans}).to_excel(_5_SPLIT_SUB, index=False)
-    pd.DataFrame({'Source': split_src, 'Translation': remerged}).to_excel(_5_REMERGED, index=False)
+    # Save with speaker_id if available
+    if split_speaker_ids:
+        pd.DataFrame({'Source': split_src, 'Translation': split_trans, 'speaker_id': split_speaker_ids}).to_excel(_5_SPLIT_SUB, index=False)
+        pd.DataFrame({'Source': split_src, 'Translation': remerged, 'speaker_id': split_speaker_ids}).to_excel(_5_REMERGED, index=False)
+    else:
+        pd.DataFrame({'Source': split_src, 'Translation': split_trans}).to_excel(_5_SPLIT_SUB, index=False)
+        pd.DataFrame({'Source': split_src, 'Translation': remerged}).to_excel(_5_REMERGED, index=False)
 
 if __name__ == '__main__':
     split_for_sub_main()

@@ -187,14 +187,30 @@ def generate_shared_prompt(previous_content_prompt, after_content_prompt, summar
 ### Points to Note
 {things_to_note_prompt}'''
 
-def get_prompt_faithfulness(lines, shared_prompt):
-    TARGET_LANGUAGE = load_key("target_language")
-    # Split lines by \n
-    line_splits = lines.split('\n')
+def get_prompt_faithfulness(lines_with_ids, shared_prompt):
+    """
+    Generate prompt for faithful translation.
     
+    Args:
+        lines_with_ids: List of dicts with 'id', 'text', 'speaker_id', 'labeled_text'
+    """
+    TARGET_LANGUAGE = load_key("target_language")
+    
+    # Build input text and JSON format using independent IDs
+    input_lines = []
     json_dict = {}
-    for i, line in enumerate(line_splits, 1):
-        json_dict[f"{i}"] = {"origin": line, "direct": f"direct {TARGET_LANGUAGE} translation {i}."}
+    
+    for item in lines_with_ids:
+        line_id = str(item['id'])
+        labeled_text = item['labeled_text']
+        input_lines.append(labeled_text)
+        json_dict[line_id] = {
+            "id": item['id'],  # 保留原始 ID 用于关联
+            "origin": labeled_text, 
+            "direct": f"direct {TARGET_LANGUAGE} translation for line {item['id']}."
+        }
+    
+    input_text = "\n".join(input_lines)
     json_format = json.dumps(json_dict, indent=2, ensure_ascii=False)
 
     src_language = load_key("whisper.detected_language")
@@ -210,6 +226,7 @@ The lines may be prefixed with `[SPEAKER_N]:` to indicate different speakers. Us
 1. Translate the original {src_language} subtitles into {TARGET_LANGUAGE} line by line
 2. Ensure the translation is faithful to the original, accurately conveying the original meaning
 3. Consider the context (including speaker info) and professional terminology
+4. **IMPORTANT**: Preserve the exact "id" field in your output for each line
 
 {shared_prompt}
 
@@ -217,11 +234,12 @@ The lines may be prefixed with `[SPEAKER_N]:` to indicate different speakers. Us
 1. Faithful to the original: Accurately convey the content and meaning of the original text, without arbitrarily changing, adding, or omitting content.
 2. Accurate terminology: Use professional terms correctly and maintain consistency in terminology.
 3. Understand the context: Fully comprehend and reflect the background and contextual relationships of the text (e.g. who is speaking).
+4. ID preservation: You must preserve the "id" field in each line's output to ensure correct association.
 </translation_principles>
 
 ## INPUT
 <subtitles>
-{lines}
+{input_text}
 </subtitles>
 
 ## Output in only JSON format and no other text
@@ -234,17 +252,26 @@ Note: Start you answer with ```json and end with ```, do not add any other text.
     return prompt_faithfulness.strip()
 
 
-def get_prompt_expressiveness(faithfulness_result, lines, shared_prompt):
+def get_prompt_expressiveness(faithfulness_result, lines_with_ids, shared_prompt):
+    """
+    Generate prompt for expressive translation.
+    
+    Args:
+        faithfulness_result: Dict with line_id as key, containing 'id', 'origin', 'direct'
+        lines_with_ids: Original list of dicts with 'id', 'text', 'speaker_id'
+    """
     TARGET_LANGUAGE = load_key("target_language")
-    json_format = {
-        key: {
+    
+    # Build JSON format preserving IDs
+    json_format = {}
+    for key, value in faithfulness_result.items():
+        json_format[key] = {
+            "id": value.get("id", key),  # 保留原始 ID
             "origin": value["origin"],
             "direct": value["direct"],
             "reflect": "your reflection on direct translation",
             "free": "your free translation"
         }
-        for key, value in faithfulness_result.items()
-    }
     json_format = json.dumps(json_format, indent=2, ensure_ascii=False)
 
     src_language = load_key("whisper.detected_language")
@@ -263,6 +290,7 @@ The original lines may be prefixed with `[SPEAKER_N]:` to indicate different spe
 3. Perform free translation based on your analysis
 4. Do not add comments or explanations in the translation, as the subtitles are for the audience to read
 5. Do not leave empty lines in the free translation, as the subtitles are for the audience to read
+6. **IMPORTANT**: Preserve the exact "id" field in your output for each line
 
 {shared_prompt}
 

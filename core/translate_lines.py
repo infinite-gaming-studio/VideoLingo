@@ -6,41 +6,79 @@ from rich import box
 from core.utils import *
 console = Console()
 
-def valid_translate_result(result: dict, required_keys: list, required_sub_keys: list):
-    # Check for the required key
-    if not all(key in result for key in required_keys):
-        return {"status": "error", "message": f"Missing required key(s): {', '.join(set(required_keys) - set(result.keys()))}"}
+def valid_translate_result(result: dict, expected_ids: set, required_sub_keys: list):
+    """
+    Validate translation result with independent IDs.
+    
+    Args:
+        result: Dict with line_id as key
+        expected_ids: Set of expected line IDs
+        required_sub_keys: List of required sub-keys
+    """
+    result_ids = set(result.keys())
+    
+    # Check if all expected IDs are present
+    if result_ids != expected_ids:
+        missing = expected_ids - result_ids
+        extra = result_ids - expected_ids
+        msg = []
+        if missing:
+            msg.append(f"Missing IDs: {missing}")
+        if extra:
+            msg.append(f"Extra IDs: {extra}")
+        return {"status": "error", "message": "; ".join(msg)}
     
     # Check for required sub-keys in all items
-    for key in result:
-        if not all(sub_key in result[key] for sub_key in required_sub_keys):
-            return {"status": "error", "message": f"Missing required sub-key(s) in item {key}: {', '.join(set(required_sub_keys) - set(result[key].keys()))}"}
+    for key, item in result.items():
+        # Check if 'id' field matches the key
+        if 'id' not in item:
+            return {"status": "error", "message": f"Missing 'id' field in item {key}"}
+        if str(item['id']) != str(key):
+            return {"status": "error", "message": f"ID mismatch in item {key}: expected {key}, got {item['id']}"}
+        
+        # Check other required fields
+        for sub_key in required_sub_keys:
+            if sub_key not in item:
+                return {"status": "error", "message": f"Missing '{sub_key}' in item {key}"}
 
     return {"status": "success", "message": "Translation completed"}
 
-def translate_lines(lines, previous_content_prompt, after_cotent_prompt, things_to_note_prompt, summary_prompt, index = 0):
+def translate_lines(lines_with_ids, previous_content_prompt, after_cotent_prompt, things_to_note_prompt, summary_prompt, index = 0):
+    """
+    Translate lines with independent ID association.
+    
+    Args:
+        lines_with_ids: List of dicts with 'id', 'text', 'speaker_id', 'labeled_text'
+    
+    Returns:
+        List of dicts with 'id', 'translation', 'speaker_id'
+    """
     shared_prompt = generate_shared_prompt(previous_content_prompt, after_cotent_prompt, summary_prompt, things_to_note_prompt)
+    
+    # Get expected IDs for validation
+    expected_ids = {str(item['id']) for item in lines_with_ids}
+    line_count = len(lines_with_ids)
 
-    # Retry translation if the length of the original text and the translated text are not the same, or if the specified key is missing
-    def retry_translation(prompt, length, step_name):
+    # Retry translation if validation fails
+    def retry_translation(prompt, step_name):
         def valid_faith(response_data):
-            return valid_translate_result(response_data, [str(i) for i in range(1, length+1)], ['direct'])
+            return valid_translate_result(response_data, expected_ids, ['direct'])
         def valid_express(response_data):
-            return valid_translate_result(response_data, [str(i) for i in range(1, length+1)], ['free'])
+            return valid_translate_result(response_data, expected_ids, ['free'])
         for retry in range(3):
             if step_name == 'faithfulness':
                 result = ask_gpt(prompt+retry* " ", resp_type='json', valid_def=valid_faith, log_title=f'translate_{step_name}')
             elif step_name == 'expressiveness':
                 result = ask_gpt(prompt+retry* " ", resp_type='json', valid_def=valid_express, log_title=f'translate_{step_name}')
-            if len(lines.split('\n')) == len(result):
+            if len(result) == line_count:
                 return result
             if retry != 2:
-                console.print(f'[yellow]⚠️ {step_name.capitalize()} translation of block {index} failed, Retry...[/yellow]')
+                console.print(f'[yellow]⚠️ {step_name.capitalize()} translation of block {index} failed (ID mismatch or length error), Retry...[/yellow]')
         raise ValueError(f'[red]❌ {step_name.capitalize()} translation of block {index} failed after 3 retries. Please check `output/gpt_log/error.json` for more details.[/red]')
 
     ## Step 1: Faithful to the Original Text
-    prompt1 = get_prompt_faithfulness(lines, shared_prompt)
-    faith_result = retry_translation(prompt1, len(lines.split('\n')), 'faithfulness')
+    prompt1 = get_prompt_faithfulness(lines_with_ids, shared_prompt)
+    faith_result = retry_translation(prompt1, 'faithfulness')
 
     for i in faith_result:
         faith_result[i]["direct"] = faith_result[i]["direct"].replace('\n', ' ')
@@ -48,8 +86,21 @@ def translate_lines(lines, previous_content_prompt, after_cotent_prompt, things_
     # If reflect_translate is False or not set, use faithful translation directly
     reflect_translate = load_key('reflect_translate')
     if not reflect_translate:
-        # If reflect_translate is False or not set, use faithful translation directly
-        translate_result = "\n".join([faith_result[i]["direct"].strip() for i in faith_result])
+        # Build result with IDs
+        result_list = []
+        for key in sorted(faith_result.keys(), key=lambda x: int(x) if x.isdigit() else x):
+            item = faith_result[key]
+            # Find matching original data by ID
+            orig_data = next((d for d in lines_with_ids if str(d['id']) == str(key)), None)
+            if orig_data:
+                result_list.append({
+                    'id': orig_data['id'],
+                    'text': orig_data['text'],
+                    'translation': item['direct'].strip(),
+                    'speaker_id': orig_data['speaker_id'],
+                    'start': orig_data.get('start'),
+                    'end': orig_data.get('end')
+                })
         
         table = Table(title="Translation Results", show_header=False, box=box.ROUNDED)
         table.add_column("Translations", style="bold")
@@ -60,11 +111,11 @@ def translate_lines(lines, previous_content_prompt, after_cotent_prompt, things_
                 table.add_row("[yellow]" + "-" * 50 + "[/yellow]")
         
         console.print(table)
-        return translate_result, lines
+        return result_list
 
     ## Step 2: Express Smoothly  
-    prompt2 = get_prompt_expressiveness(faith_result, lines, shared_prompt)
-    express_result = retry_translation(prompt2, len(lines.split('\n')), 'expressiveness')
+    prompt2 = get_prompt_expressiveness(faith_result, lines_with_ids, shared_prompt)
+    express_result = retry_translation(prompt2, 'expressiveness')
 
     table = Table(title="Translation Results", show_header=False, box=box.ROUNDED)
     table.add_column("Translations", style="bold")
@@ -77,13 +128,27 @@ def translate_lines(lines, previous_content_prompt, after_cotent_prompt, things_
 
     console.print(table)
 
-    translate_result = "\n".join([express_result[i]["free"].replace('\n', ' ').strip() for i in express_result])
+    # Build result with IDs
+    result_list = []
+    for key in sorted(express_result.keys(), key=lambda x: int(x) if x.isdigit() else x):
+        item = express_result[key]
+        # Find matching original data by ID
+        orig_data = next((d for d in lines_with_ids if str(d['id']) == str(key)), None)
+        if orig_data:
+            result_list.append({
+                'id': orig_data['id'],
+                'text': orig_data['text'],
+                'translation': item['free'].replace('\n', ' ').strip(),
+                'speaker_id': orig_data['speaker_id'],
+                'start': orig_data.get('start'),
+                'end': orig_data.get('end')
+            })
 
-    if len(lines.split('\n')) != len(translate_result.split('\n')):
+    if len(result_list) != line_count:
         console.print(Panel(f'[red]❌ Translation of block {index} failed, Length Mismatch, Please check `output/gpt_log/translate_expressiveness.json`[/red]'))
-        raise ValueError(f'Origin ···{lines}···,\nbut got ···{translate_result}···')
+        raise ValueError(f'Expected {line_count} lines, but got {len(result_list)}')
 
-    return translate_result, lines
+    return result_list
 
 
 if __name__ == '__main__':

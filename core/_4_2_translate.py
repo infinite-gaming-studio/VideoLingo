@@ -14,7 +14,11 @@ console = Console()
 
 # Function to split text into chunks
 def split_chunks_by_chars(chunk_size, max_i): 
-    """Split text into chunks based on character count, return a list of multi-line text chunks"""
+    """Split text into chunks based on character count, return list of (chunk_id, chunk_data) tuples
+    
+    Returns:
+        List of tuples: (chunk_index, list of {'id': row_idx, 'text': text, 'speaker_id': speaker_id})
+    """
     df = pd.read_excel(_3_2_SPLIT_BY_MEANING)
     sentences_data = df.to_dict('records')
 
@@ -22,44 +26,68 @@ def split_chunks_by_chars(chunk_size, max_i):
     chunk = []
     current_char_count = 0
     sentence_count = 0
-    for item in sentences_data:
+    
+    for row_idx, item in enumerate(sentences_data):
         sentence = str(item['text'])
         speaker_id = item.get('speaker_id', None)
-        # Prefix with speaker for context
+        
+        # Prefix with speaker for context (only for translation input, not stored)
         prefix = f"[{speaker_id}]: " if speaker_id is not None else ""
         labeled_sentence = prefix + sentence
         
+        sentence_data = {
+            'id': row_idx,  # 唯一 ID，用于关联
+            'text': sentence,
+            'speaker_id': speaker_id,
+            'start': item.get('start'),
+            'end': item.get('end'),
+            'labeled_text': labeled_sentence  # 带 speaker 前缀的文本，用于翻译
+        }
+        
         if current_char_count + len(labeled_sentence + '\n') > chunk_size or sentence_count == max_i:
-            chunks.append("\n".join(chunk))
-            chunk = [labeled_sentence]
+            chunks.append((len(chunks), chunk))
+            chunk = [sentence_data]
             current_char_count = len(labeled_sentence + '\n')
             sentence_count = 1
         else:
-            chunk.append(labeled_sentence)
+            chunk.append(sentence_data)
             current_char_count += len(labeled_sentence + '\n')
             sentence_count += 1
     if chunk:
-        chunks.append("\n".join(chunk))
+        chunks.append((len(chunks), chunk))
     return chunks
 
 # Get context from surrounding chunks
 def get_previous_content(chunks, chunk_index):
     if chunk_index == 0: return None
-    lines = chunks[chunk_index - 1].split('\n')
-    return lines[-3:] # Get last 3 lines
+    # chunks is now list of (index, list of sentence_data)
+    prev_chunk_data = chunks[chunk_index - 1][1]
+    return [item['labeled_text'] for item in prev_chunk_data[-3:]]
+
 def get_after_content(chunks, chunk_index):
     if chunk_index == len(chunks) - 1: return None
-    lines = chunks[chunk_index + 1].split('\n')
-    return lines[:2] # Get first 2 lines
+    next_chunk_data = chunks[chunk_index + 1][1]
+    return [item['labeled_text'] for item in next_chunk_data[:2]]
 
 # 🔍 Translate a single chunk
-def translate_chunk(chunk, chunks, theme_prompt, i):
-    things_to_note_prompt = search_things_to_note_in_prompt(chunk)
+def translate_chunk(chunk_data, chunks, theme_prompt, i):
+    """
+    Translate a chunk of sentences.
+    
+    Args:
+        chunk_data: Tuple of (chunk_index, list of sentence_data dicts)
+    
+    Returns:
+        Tuple of (chunk_index, list of result dicts with id, translation, speaker_id)
+    """
+    chunk_idx, sentences = chunk_data
+    things_to_note_prompt = search_things_to_note_in_prompt("\n".join([s['labeled_text'] for s in sentences]))
     previous_content_prompt = get_previous_content(chunks, i)
     after_content_prompt = get_after_content(chunks, i)
-    # translate_lines expects strings
-    translation, original_with_speakers = translate_lines(chunk, previous_content_prompt, after_content_prompt, things_to_note_prompt, theme_prompt, i)
-    return i, original_with_speakers, translation
+    
+    # translate_lines now accepts list of dicts and returns list of result dicts
+    result_list = translate_lines(sentences, previous_content_prompt, after_content_prompt, things_to_note_prompt, theme_prompt, i)
+    return i, result_list
 
 # Add similarity calculation function
 def similar(a, b):
@@ -81,8 +109,8 @@ def translate_all():
         task = progress.add_task("[cyan]Translating chunks...", total=len(chunks))
         with concurrent.futures.ThreadPoolExecutor(max_workers=load_key("max_workers")) as executor:
             futures = []
-            for i, chunk in enumerate(chunks):
-                future = executor.submit(translate_chunk, chunk, chunks, theme_prompt, i)
+            for i, chunk_data in enumerate(chunks):
+                future = executor.submit(translate_chunk, chunk_data, chunks, theme_prompt, i)
                 futures.append(future)
             results = []
             for future in concurrent.futures.as_completed(futures):
@@ -91,26 +119,23 @@ def translate_all():
 
     results.sort(key=lambda x: x[0])  # Sort results based on original order
     
-    # 💾 Save results to lists and Excel file
-    src_text, trans_text, speaker_ids, starts, ends = [], [], [], [], []
-    df_source = pd.read_excel(_3_2_SPLIT_BY_MEANING)
+    # 💾 Collect all translated results with IDs
+    # results is a list of (chunk_index, list of result_dicts)
+    all_results = []
+    for chunk_idx, result_list in results:
+        all_results.extend(result_list)
     
-    # Reconstruct src_text and trans_text from results
-    # results is a list of (index, original_with_speakers, translation)
-    total_lines = 0
-    for i, chunk_str in enumerate(chunks):
-        chunk_results = [r for r in results if r[0] == i][0]
-        original_lines = chunk_results[1].split('\n')
-        translated_lines = chunk_results[2].split('\n')
-        
-        for orig, trans in zip(original_lines, translated_lines):
-            # Strip speaker prefix from orig for saving if needed, but we already have df_source
-            src_text.append(df_source.iloc[total_lines]['text'])
-            speaker_ids.append(df_source.iloc[total_lines]['speaker_id'])
-            starts.append(df_source.iloc[total_lines]['start'])
-            ends.append(df_source.iloc[total_lines]['end'])
-            trans_text.append(trans)
-            total_lines += 1
+    # Sort by ID to maintain original order
+    all_results.sort(key=lambda x: x['id'])
+    
+    # Build DataFrame with ID-based association
+    src_text, trans_text, speaker_ids, starts, ends = [], [], [], [], []
+    for item in all_results:
+        src_text.append(item['text'])
+        trans_text.append(item['translation'])
+        speaker_ids.append(item['speaker_id'])
+        starts.append(item.get('start'))
+        ends.append(item.get('end'))
     
     # Trim long translation text
     df_text = pd.read_excel(_2_CLEANED_CHUNKS)
