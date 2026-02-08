@@ -84,11 +84,18 @@ def split_align_subs(src_lines: List[str], tr_lines: List[str]):
     
     @except_handler("Error in split_align_subs")
     def process(i):
-        split_src = split_sentence(src_lines[i], num_parts=2).strip()
-        src_parts, tr_parts, tr_remerged = align_subs(src_lines[i], tr_lines[i], split_src)
-        src_lines[i] = src_parts
-        tr_lines[i] = tr_parts
-        remerged_tr_lines[i] = tr_remerged
+        try:
+            split_src = split_sentence(src_lines[i], num_parts=2).strip()
+            src_parts, tr_parts, tr_remerged = align_subs(src_lines[i], tr_lines[i], split_src)
+            src_lines[i] = src_parts
+            tr_lines[i] = tr_parts
+            remerged_tr_lines[i] = tr_remerged
+        except Exception as e:
+            console.print(f"[yellow]⚠️ Align failed for line {i}, using original: {e}[/yellow]")
+            # Fallback: use original text without splitting
+            src_lines[i] = [src_lines[i]]
+            tr_lines[i] = [tr_lines[i]]
+            remerged_tr_lines[i] = tr_lines[i]
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=load_key("max_workers")) as executor:
         executor.map(process, to_split)
@@ -122,14 +129,21 @@ def split_for_sub_main():
         # 更新源数据继续下一轮分割
         src, trans = split_src, split_trans
 
-    # 使用最终的 src 和 trans（循环结束后的值）
-    split_src, split_trans, remerged = split_align_subs(src.copy(), trans)
+    # 循环结束后，src 和 trans 已经是最终的分割结果
+    # 但由于 split_align_subs 内部可能对某些行进行了分割（变成列表），
+    # 需要调用最后一次来确保所有数据都被展平
+    split_src, split_trans, remerged = split_align_subs(src.copy(), trans.copy())
     
     # 确保二者有相同的长度，防止报错
-    if len(split_src) > len(remerged):
-        remerged += [None] * (len(split_src) - len(remerged))
-    elif len(remerged) > len(split_src):
-        split_src += [None] * (len(remerged) - len(split_src))
+    min_len = min(len(split_src), len(split_trans), len(remerged))
+    max_len = max(len(split_src), len(split_trans), len(remerged))
+    
+    if len(split_src) < max_len:
+        split_src += [""] * (max_len - len(split_src))
+    if len(split_trans) < max_len:
+        split_trans += [""] * (max_len - len(split_trans))
+    if len(remerged) < max_len:
+        remerged += [""] * (max_len - len(remerged))
     
     pd.DataFrame({'Source': split_src, 'Translation': split_trans}).to_excel(_5_SPLIT_SUB, index=False)
     pd.DataFrame({'Source': split_src, 'Translation': remerged}).to_excel(_5_REMERGED, index=False)
