@@ -121,15 +121,10 @@ def page_setting():
         config_input(t("API_KEY"), "api.key")
         config_input(t("BASE_URL"), "api.base_url", help=t("Openai format, will add /v1/chat/completions automatically"))
         
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            config_input(t("MODEL"), "api.model", help=t("click to check API validity")+ " 👉")
-        with c2:
-            st.write("")
-            st.write("")
-            if st.button(t("Verify"), key="api", use_container_width=True):
-                st.toast(t("API Key is valid") if check_api() else t("API Key is invalid"), 
-                        icon="✅" if check_api() else "❌")
+        config_input(t("MODEL"), "api.model", help=t("click to check API validity"))
+        if st.button(t("🔄 Verify API"), key="api", use_container_width=True):
+            st.toast(t("API Key is valid") if check_api() else t("API Key is invalid"), 
+                    icon="✅" if check_api() else "❌")
         llm_support_json = st.toggle(t("LLM JSON Format Support"), value=load_key("api.llm_support_json"), help=t("Enable if your LLM supports JSON mode output"))
         if llm_support_json != load_key("api.llm_support_json"):
             update_key("api.llm_support_json", llm_support_json)
