@@ -26,18 +26,10 @@ RUN if [ "$BUILD_MODE" = "dev" ]; then \
 # 开发模式下复制本地代码 / Copy local code in dev mode
 COPY . .
 
-# 读取版本号 / Read version from file
-RUN grep -E "^__version__\s*=" videolingo_cloud/_version.py | sed 's/.*"\(.*\)".*/\1/' > /tmp/version.txt
-
-# 构建参数：版本号 / Build argument: version
-ARG VIDEOLINGO_VERSION=""
-
-# 设置版本号环境变量 / Set version environment variable
-# 优先使用构建参数，否则从文件读取
-ENV VIDEOLINGO_VERSION=${VIDEOLINGO_VERSION:-$(cat /tmp/version.txt)}
-
-# 打印构建信息 / Print build info
-RUN echo "Building VideoLingo version: $(cat /tmp/version.txt)"
+# 读取版本号并设置为环境变量 / Read version and set as environment variable
+RUN VERSION=$(grep -E "^__version__\s*=" videolingo_cloud/_version.py 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' || echo "unknown") && \
+    echo "Building VideoLingo version: $VERSION" && \
+    echo "VIDEOLINGO_VERSION=$VERSION" > /app/.env.version
 
 # 环境变量配置 / Environment variables
 ENV ANTHROPIC_API_KEY="" 
