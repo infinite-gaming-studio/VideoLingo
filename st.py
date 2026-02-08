@@ -156,9 +156,20 @@ def main():
     # Log version on startup
     print(f"🚀 VideoLingo v{VIDEOLINGO_VERSION} starting...")
     
-    logo_col, _ = st.columns([1,1])
-    with logo_col:
+    # Header with logo and version in top right corner
+    header_col1, header_col2 = st.columns([3, 1])
+    with header_col1:
         st.image("docs/logo.png", use_column_width=True)
+    with header_col2:
+        # Display version in top right corner
+        st.markdown(
+            f"<div style='text-align: right; padding-top: 20px;'>"
+            f"<span style='background-color: #f0f2f6; padding: 5px 10px; border-radius: 15px; font-size: 14px; color: #666;'>"
+            f"📦 v{VIDEOLINGO_VERSION}"
+            f"</span></div>",
+            unsafe_allow_html=True
+        )
+    
     st.markdown(button_style, unsafe_allow_html=True)
     welcome_text = t("Hello, welcome to VideoLingo. If you encounter any issues, feel free to get instant answers with our Free QA Agent <a href=\"https://share.fastgpt.in/chat/share?shareId=066w11n3r9aq6879r4z0v9rh\" target=\"_blank\">here</a>! You can also try out our SaaS website at <a href=\"https://videolingo.io\" target=\"_blank\">videolingo.io</a> for free!")
     st.markdown(f"<p style='font-size: 20px; color: #808080;'>{welcome_text}</p>", unsafe_allow_html=True)
@@ -166,9 +177,6 @@ def main():
     with st.sidebar:
         page_setting()
         st.markdown(give_star_button, unsafe_allow_html=True)
-        # Display version at bottom of sidebar
-        st.divider()
-        st.caption(f"📦 VideoLingo v{VIDEOLINGO_VERSION}")
     download_video_section()
     text_processing_section()
     audio_processing_section()
