@@ -125,7 +125,7 @@ def page_setting():
         with c1:
             config_input(t("MODEL"), "api.model", help=t("click to check API validity")+ " 👉")
         with c2:
-            if st.button("📡", key="api"):
+            if st.button(t("Verify"), key="api"):
                 st.toast(t("API Key is valid") if check_api() else t("API Key is invalid"), 
                         icon="✅" if check_api() else "❌")
         llm_support_json = st.toggle(t("LLM JSON Format Support"), value=load_key("api.llm_support_json"), help=t("Enable if your LLM supports JSON mode output"))
