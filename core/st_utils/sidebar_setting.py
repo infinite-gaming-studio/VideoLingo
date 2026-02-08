@@ -191,15 +191,26 @@ def page_setting():
         if diarization:
             c_min, c_max = st.columns(2)
             with c_min:
-                min_s = st.number_input(t("Min Speakers"), value=int(load_key("whisper.min_speakers") or 1), min_value=1, max_value=20, step=1, help=t("Set the range of speakers for diarization."))
+                # Default to 2 for min_speakers to allow flexibility in detection
+                current_min = load_key("whisper.min_speakers")
+                if current_min is None or current_min == 0:
+                    current_min = 2  # Default: at least 2 speakers for multi-speaker scenarios
+                min_s = st.number_input(t("Min Speakers"), value=int(current_min), min_value=1, max_value=20, step=1, help=t("Minimum number of speakers to detect. For movies/conversations, set to 2."))
                 if min_s != load_key("whisper.min_speakers"):
                     update_key("whisper.min_speakers", min_s)
                     st.rerun()
             with c_max:
-                max_s = st.number_input(t("Max Speakers"), value=int(load_key("whisper.max_speakers") or 1), min_value=1, max_value=20, step=1, help=t("Set the range of speakers for diarization."))
+                # Default to 6 for max_speakers to capture more speakers in complex scenarios
+                current_max = load_key("whisper.max_speakers")
+                if current_max is None or current_max == 0:
+                    current_max = 6  # Default: up to 6 speakers
+                max_s = st.number_input(t("Max Speakers"), value=int(current_max), min_value=1, max_value=20, step=1, help=t("Maximum number of speakers to detect. For movies with many characters, set higher (6-10)."))
                 if max_s != load_key("whisper.max_speakers"):
                     update_key("whisper.max_speakers", max_s)
                     st.rerun()
+            
+            # Add helpful guidance
+            st.info("💡 **提示**：对于电影或多人对话场景，建议设置 min=2, max=6-10。识别后可在下一步合并重复角色。")
 
         # Show cloud settings only if cloud runtime is selected
         if runtime == "cloud":

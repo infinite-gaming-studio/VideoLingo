@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from videolingo_cloud.unified_client import UnifiedCloudClient, check_cloud_connection
+from videolingo_cloud.client import UnifiedCloudClient, check_cloud_connection
 from rich import print as rprint
 import json
 

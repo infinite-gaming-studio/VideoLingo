@@ -128,6 +128,123 @@ def load_speaker_mappings():
             return json.load(f)
     return {}
 
+
+def merge_speakers(df_aligned, speakers_to_merge):
+    """Merge multiple speakers into one (the first one in the list).
+    
+    Args:
+        df_aligned: DataFrame with aligned subtitles
+        speakers_to_merge: List of speaker IDs to merge
+    """
+    if len(speakers_to_merge) < 2:
+        return
+    
+    # Use the first speaker as the target
+    target_speaker = speakers_to_merge[0]
+    
+    # Replace all speakers in the list with the target
+    for speaker in speakers_to_merge[1:]:
+        df_aligned.loc[df_aligned['speaker_id'] == speaker, 'speaker_id'] = target_speaker
+    
+    # Save the modified DataFrame
+    df_aligned.to_excel(_6_ALIGNED_FOR_AUDIO, index=False)
+    print(f"[green]✅ Merged {len(speakers_to_merge)} speakers into {target_speaker}[/green]")
+
+
+def split_speaker_by_time(df_aligned, speaker_to_split, split_points):
+    """Split a speaker into multiple speakers based on time points.
+    
+    Args:
+        df_aligned: DataFrame with aligned subtitles
+        speaker_to_split: Speaker ID to split
+        split_points: List of time points (in seconds) to split at
+    """
+    if not split_points:
+        return
+    
+    # Parse timestamps to seconds
+    def parse_timestamp(ts_str):
+        try:
+            start_str = ts_str.split(' --> ')[0]
+            parts = start_str.replace(',', '.').split(':')
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+        except:
+            return 0
+    
+    # Add temporary column with start time in seconds
+    df_aligned['start_sec'] = df_aligned['timestamp'].apply(parse_timestamp)
+    
+    # Sort split points
+    split_points = sorted(split_points)
+    
+    # Create new speaker names
+    base_name = speaker_to_split
+    new_speaker_names = [f"{base_name}_PART{i+1}" for i in range(len(split_points) + 1)]
+    
+    # Update speaker IDs based on time ranges
+    for idx, row in df_aligned.iterrows():
+        if row['speaker_id'] == speaker_to_split:
+            start_sec = row['start_sec']
+            
+            # Determine which segment this belongs to
+            segment_idx = 0
+            for split_point in split_points:
+                if start_sec >= split_point:
+                    segment_idx += 1
+                else:
+                    break
+            
+            df_aligned.at[idx, 'speaker_id'] = new_speaker_names[segment_idx]
+    
+    # Drop temporary column
+    df_aligned.drop(columns=['start_sec'], inplace=True)
+    
+    # Save the modified DataFrame
+    df_aligned.to_excel(_6_ALIGNED_FOR_AUDIO, index=False)
+    print(f"[green]✅ Split {speaker_to_split} into {len(new_speaker_names)} speakers: {', '.join(new_speaker_names)}[/green]")
+
+
+def reassign_speaker_segment(df_aligned, start_time, end_time, old_speaker, new_speaker):
+    """Reassign a specific time segment from one speaker to another.
+    
+    Useful for fine-tuning when automatic detection is wrong for specific segments.
+    
+    Args:
+        df_aligned: DataFrame with aligned subtitles
+        start_time: Start time in seconds
+        end_time: End time in seconds
+        old_speaker: Current speaker ID
+        new_speaker: New speaker ID to assign
+    """
+    def parse_timestamp(ts_str):
+        try:
+            start_str = ts_str.split(' --> ')[0]
+            parts = start_str.replace(',', '.').split(':')
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+        except:
+            return 0
+    
+    # Add temporary column with start time in seconds
+    df_aligned['start_sec'] = df_aligned['timestamp'].apply(parse_timestamp)
+    
+    # Find segments within the time range and matching the old speaker
+    mask = (
+        (df_aligned['speaker_id'] == old_speaker) &
+        (df_aligned['start_sec'] >= start_time) &
+        (df_aligned['start_sec'] <= end_time)
+    )
+    
+    count = mask.sum()
+    df_aligned.loc[mask, 'speaker_id'] = new_speaker
+    
+    # Drop temporary column
+    df_aligned.drop(columns=['start_sec'], inplace=True)
+    
+    # Save the modified DataFrame
+    df_aligned.to_excel(_6_ALIGNED_FOR_AUDIO, index=False)
+    print(f"[green]✅ Reassigned {count} segments from {old_speaker} to {new_speaker}[/green]")
+    return count
+
 if __name__ == "__main__":
     extract_speaker_snippets()
     print(get_speaker_profiles())

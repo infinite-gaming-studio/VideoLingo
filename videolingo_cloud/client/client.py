@@ -471,6 +471,22 @@ def separate_audio_cloud_compatible(
     )
 
 
+def get_server_info(url: str = None) -> Dict[str, Any]:
+    """Get detailed information about the cloud server"""
+    client = UnifiedCloudClient(url)
+    try:
+        health = client.health_check()
+        return {
+            'available': True,
+            'health': health
+        }
+    except Exception as e:
+        return {
+            'available': False,
+            'error': str(e)
+        }
+
+
 if __name__ == "__main__":
     import argparse
     

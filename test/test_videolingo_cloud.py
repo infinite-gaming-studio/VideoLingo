@@ -12,12 +12,11 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from videolingo_cloud.videolingo_cloud_client import (
-    VideoLingoCloudClient,
+from videolingo_cloud.client import (
+    UnifiedCloudClient,
     get_cloud_url,
     get_cloud_token,
     check_cloud_connection,
-    get_server_info,
     transcribe_audio_cloud
 )
 from rich import print as rprint
@@ -167,8 +166,8 @@ def test_transcribe_with_api_function():
         shutil.copy(audio_file, vocal_audio_file)
     
     # 获取音频时长
-    from videolingo_cloud.videolingo_cloud_client import VideoLingoCloudClient
-    client = VideoLingoCloudClient(CLOUD_URL)
+    from videolingo_cloud.client import UnifiedCloudClient
+    client = UnifiedCloudClient(CLOUD_URL)
     
     # 转录前 60 秒（测试）
     start_time = 0.0

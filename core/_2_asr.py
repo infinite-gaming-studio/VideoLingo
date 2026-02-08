@@ -35,7 +35,7 @@ def check_cloud_native_prerequisites():
     
     # Use unified cloud client to get URL
     try:
-        from videolingo_cloud.videolingo_cloud_client import get_cloud_url, check_cloud_connection
+        from videolingo_cloud.client import get_cloud_url, check_cloud_connection
         cloud_url = get_cloud_url()
         
         if not cloud_url:

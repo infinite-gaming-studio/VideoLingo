@@ -10,8 +10,6 @@ Endpoints:
 Deploy on GPU cloud platforms (Colab, Kaggle, etc.)
 """
 
-from _version import SERVER_VERSION
-
 import os
 import sys
 import builtins
@@ -30,33 +28,28 @@ import base64
 import tempfile
 import warnings
 import time
+import gc
 from typing import Optional, Union, Any
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 import torch
-
-# Patch torch.load for PyTorch 2.6+ compatibility
-_original_torch_load = torch.load
-def _patched_torch_load(*args, **kwargs):
-    kwargs['weights_only'] = False
-    return _original_torch_load(*args, **kwargs)
-torch.load = _patched_torch_load
-import sys
-sys.modules['torch'].load = _patched_torch_load
-
 import whisperx
 import librosa
 import numpy as np
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, APIRouter, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 import uvicorn
 
+from videolingo_cloud._version import SERVER_VERSION
+from videolingo_cloud.shared.models import (
+    TranscriptionResponse, SeparationResponse, HealthResponse
+)
+
 # ============== Logging ==============
-import datetime
 def vprint(*args, **kwargs):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}]", *args, **kwargs, flush=True)
 
 # Demucs imports
@@ -64,13 +57,10 @@ try:
     from demucs.pretrained import get_model
     from demucs.audio import save_audio
     from demucs.apply import apply_model
-    from demucs.hdemucs import HDemucs
     DEMUC_AVAILABLE = True
 except ImportError:
     DEMUC_AVAILABLE = False
     vprint("⚠️ Demucs not available, separation service disabled")
-
-import gc
 
 warnings.filterwarnings("ignore")
 
@@ -82,46 +72,31 @@ diarize_model_cache = {}
 device = None
 compute_type = None
 
+# Security
+security = HTTPBearer()
+
+
 def get_device():
     """Smart device detection: CUDA -> MPS -> CPU"""
     if torch.cuda.is_available():
-        # Prefer float16 for CUDA GPUs, only use int8 if necessary
         return "cuda", "float16"
     elif torch.backends.mps.is_available():
         return "mps", "float16"
     else:
         return "cpu", "int8"
 
-# Security
-security = HTTPBearer()
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Verify the bearer token against environment variable"""
-    # Accept both variants for compatibility
     token = os.getenv("VIDEOLINGO_CLOUD_TOKEN") or os.getenv("WHISPER_SERVER_TOKEN") or os.getenv("WHISPERX_CLOUD_TOKEN")
     if not token:
-        # If no token is set in environment, allow all requests for backward compatibility
-        # but print a warning on first hit?
         return True
     
     if credentials.credentials != token:
         raise HTTPException(status_code=403, detail="Invalid authentication token")
     return True
 
-# ============== Pydantic Models ==============
 
-class TranscriptionRequest(BaseModel):
-    language: Optional[str] = Field(default=None, description="Language code (e.g., 'en', 'zh')")
-    model: str = Field(default="large-v3", description="Whisper model")
-    batch_size: Optional[int] = Field(default=None, description="Batch size")
-    vad_onset: float = Field(default=0.500)
-    vad_offset: float = Field(default=0.363)
-    align: bool = Field(default=True)
-    speaker_diarization: bool = Field(default=False)
-    min_speakers: Optional[int] = None
-    max_speakers: Optional[int] = None
-
-# Helper function to parse boolean from form data
 def parse_bool(value: Any) -> bool:
     """Parse boolean value from form data (string or bool)"""
     if isinstance(value, bool):
@@ -130,38 +105,6 @@ def parse_bool(value: Any) -> bool:
         return value.lower() in ('true', '1', 'yes', 'on')
     return bool(value)
 
-class TranscriptionResponse(BaseModel):
-    success: bool
-    language: str
-    segments: list
-    word_segments: Optional[list] = None
-    speakers: Optional[list] = None
-    processing_time: float
-    device: str
-    model: str
-    server_version: str = SERVER_VERSION
-
-class SeparationResponse(BaseModel):
-    success: bool
-    vocals_base64: Optional[str] = None
-    background_base64: Optional[str] = None
-    processing_time: float
-    device: str
-    server_version: str = SERVER_VERSION
-
-class HealthResponse(BaseModel):
-    status: str
-    device: str
-    cuda_available: bool
-    mps_available: bool
-    gpu_memory: Optional[float] = None
-    whisper_models_loaded: list
-    demucs_model_loaded: bool
-    align_models_loaded: list
-    diarize_model_loaded: bool
-    services: dict
-    server_version: str = SERVER_VERSION
-    platform: str
 
 # ============== Model Loading ==============
 
@@ -171,7 +114,8 @@ def get_or_load_whisper_model(model_name: str, language: Optional[str] = None, b
     
     if cache_key not in whisper_model_cache:
         vprint(f"📥 Loading Whisper model: {model_name} (compute_type: {compute_type})...")
-        vad_options = {"vad_onset": 0.500, "vad_offset": 0.363}
+        # Optimized VAD parameters for better speaker detection
+        vad_options = {"vad_onset": 0.300, "vad_offset": 0.200}
         asr_options = {"temperatures": [0], "initial_prompt": ""}
 
         model = whisperx.load_model(
@@ -182,6 +126,7 @@ def get_or_load_whisper_model(model_name: str, language: Optional[str] = None, b
         vprint(f"✅ Whisper model loaded: {model_name} ({compute_type})")
     
     return whisper_model_cache[cache_key]
+
 
 def get_or_load_demucs_model():
     """Load or retrieve cached Demucs model"""
@@ -198,6 +143,7 @@ def get_or_load_demucs_model():
 
     return demucs_model_cache['htdemucs']
 
+
 def get_or_load_align_model(language_code: str):
     """Load or retrieve cached alignment model"""
     if language_code not in align_model_cache:
@@ -208,6 +154,7 @@ def get_or_load_align_model(language_code: str):
         align_model_cache[language_code] = (align_model, align_metadata)
         vprint(f"✅ Alignment model loaded: {language_code}")
     return align_model_cache[language_code]
+
 
 def get_or_load_diarize_model():
     """Load or retrieve cached diarization model"""
@@ -226,23 +173,72 @@ def get_or_load_diarize_model():
             vprint(f"✅ Diarization model loaded")
         except AttributeError as e:
             if "NoneType" in str(e) and "to" in str(e):
-                 raise ValueError("Failed to load pyannote pipeline. Please check your HF_TOKEN and basic model permissions.") from e
+                 raise ValueError("Failed to load pyannote pipeline. Please check your HF_TOKEN.") from e
             raise e
     return diarize_model_cache['diarize']
 
+
 # ============== Audio Processing ==============
 
-def process_audio(audio_bytes: bytes):
-    """Load and preprocess audio"""
+def process_audio(audio_bytes: bytes, enhance_audio: bool = True):
+    """Load and preprocess audio with optional enhancement for better diarization"""
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
     
     try:
         audio, sr = librosa.load(tmp_path, sr=16000, mono=True)
+        
+        if enhance_audio:
+            audio = enhance_audio_for_diarization(audio, sr)
+        
         return audio
     finally:
         os.unlink(tmp_path)
+
+
+def enhance_audio_for_diarization(audio: np.ndarray, sr: int = 16000) -> np.ndarray:
+    """Apply audio enhancements to improve speaker diarization accuracy"""
+    try:
+        # 1. Noise reduction using spectral gating
+        noise_sample_duration = min(int(0.5 * sr), len(audio) // 10)
+        if noise_sample_duration > 1000:
+            noise_profile = audio[:noise_sample_duration]
+            
+            stft = librosa.stft(audio)
+            magnitude = np.abs(stft)
+            phase = np.angle(stft)
+            
+            noise_stft = librosa.stft(noise_profile)
+            noise_magnitude = np.mean(np.abs(noise_stft), axis=1, keepdims=True)
+            
+            oversubtraction = 1.5
+            magnitude_reduced = np.maximum(
+                magnitude - oversubtraction * noise_magnitude,
+                0.01 * magnitude
+            )
+            
+            stft_reduced = magnitude_reduced * np.exp(1j * phase)
+            audio = librosa.istft(stft_reduced, length=len(audio))
+        
+        # 2. Volume normalization
+        target_rms = 10 ** (-20 / 20)
+        current_rms = np.sqrt(np.mean(audio ** 2))
+        if current_rms > 0:
+            audio = audio * (target_rms / current_rms)
+            audio = np.clip(audio, -1.0, 1.0)
+        
+        # 3. Pre-emphasis filter
+        pre_emphasis = 0.97
+        audio = np.append(audio[0], audio[1:] - pre_emphasis * audio[:-1])
+        
+        vprint(f"   🔧 Audio enhancement applied")
+        
+    except Exception as e:
+        vprint(f"   ⚠️ Audio enhancement failed: {str(e)}")
+    
+    return audio
+
 
 # ============== Lifespan ==============
 
@@ -295,6 +291,7 @@ async def lifespan(app: FastAPI):
     if device == "cuda":
         torch.cuda.empty_cache()
 
+
 # ============== FastAPI App ==============
 
 app = FastAPI(
@@ -331,12 +328,10 @@ async def transcribe(
     """Transcribe audio using WhisperX"""
     start_time = time.time()
     
-    # Parse boolean parameters from form data
-    vprint(f"📨 Raw params: align={align!r} (type={type(align).__name__}), speaker_diarization={speaker_diarization!r} (type={type(speaker_diarization).__name__})")
     align = parse_bool(align)
     speaker_diarization = parse_bool(speaker_diarization)
     
-    vprint(f"🔧 Parsed params: align={align}, speaker_diarization={speaker_diarization}, min_speakers={min_speakers}, max_speakers={max_speakers}")
+    vprint(f"🔧 Params: align={align}, diarization={speaker_diarization}, min={min_speakers}, max={max_speakers}")
     
     if batch_size is None:
         if device == "cuda":
@@ -382,7 +377,6 @@ async def transcribe(
                 diarize_kwargs['max_speakers'] = max_speakers
             diarize_segments = diarize_model(audio_array, **diarize_kwargs)
             
-            # Create result dict with word segments for speaker assignment
             result_for_diarization = {"segments": segments}
             if word_segments:
                 result_for_diarization["word_segments"] = word_segments
@@ -412,6 +406,7 @@ async def transcribe(
         if device == "cuda":
             torch.cuda.empty_cache()
 
+
 # Separation Router
 separation_router = APIRouter(prefix="/separation", tags=["Separation - Demucs"])
 
@@ -437,7 +432,6 @@ async def separate_audio(
             model = get_or_load_demucs_model()
 
             vprint("🎵 Separating audio...")
-            # Load audio file
             from torchaudio import load as torchaudio_load
             from torchaudio import transforms as T
             wav, sr = torchaudio_load(input_path)
@@ -446,12 +440,12 @@ async def separate_audio(
             # Ensure stereo (2 channels) for demucs
             if wav.shape[0] == 1:
                 vprint("⚠️ Input is mono, converting to stereo...")
-                wav = wav.repeat(2, 1)  # Repeat mono to stereo
+                wav = wav.repeat(2, 1)
             elif wav.shape[0] > 2:
                 vprint("⚠️ Input has more than 2 channels, using first 2...")
                 wav = wav[:2, :]
 
-            # Resample to model's expected sample rate if needed
+            # Resample if needed
             if sr != model.samplerate:
                 vprint(f"⚠️ Resampling from {sr}Hz to {model.samplerate}Hz...")
                 resampler = T.Resample(sr, model.samplerate).to(device)
@@ -459,15 +453,11 @@ async def separate_audio(
 
             # Apply separation
             with torch.no_grad():
-                # wav shape: [channels, time]
-                # add batch dimension for demucs: [batch, channels, time]
                 wav = wav.unsqueeze(0)
                 sources = apply_model(model, wav, device=device, shifts=1, split=True, overlap=0.25)
-                # sources shape: [batch, sources, channels, time]
-                sources = sources.squeeze(0).cpu()  # Remove batch dimension
+                sources = sources.squeeze(0).cpu()
 
-            # Get source names from the model
-            # For htdemucs: drums, bass, other, vocals
+            # Get source names
             sources_dict = {}
             for i, src_name in enumerate(model.sources):
                 sources_dict[src_name] = sources[i]
@@ -482,7 +472,7 @@ async def separate_audio(
                 vocals_path = tmp_v.name
             save_audio(sources_dict['vocals'], vocals_path, **kwargs)
 
-            # Save background (everything except vocals)
+            # Save background
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_b:
                 bg_path = tmp_b.name
             background = sum(sources_dict[src] for src in sources_dict if src != 'vocals')
@@ -528,6 +518,7 @@ async def separate_audio(
         vprint(f"❌ Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # ============== Main Routes ==============
 
 @app.get("/", response_model=HealthResponse)
@@ -562,6 +553,7 @@ async def health_check():
         platform=platform_str
     )
 
+
 @app.delete("/cache", dependencies=[Depends(verify_token)])
 async def clear_cache():
     """Clear all model caches"""
@@ -573,11 +565,13 @@ async def clear_cache():
         torch.cuda.empty_cache()
     return {"status": "All caches cleared"}
 
+
 # Include routers
 app.include_router(asr_router)
 app.include_router(separation_router)
 
-# ============== Main ==============
+
+# ============== Server Runner ==============
 
 def run_server(host="0.0.0.0", port=8000):
     """Run the server (for programmatic use)"""
@@ -588,38 +582,47 @@ def run_server(host="0.0.0.0", port=8000):
         pass
     uvicorn.run(app, host=host, port=port)
 
+
+def setup_ngrok_tunnel(port: int):
+    """Setup ngrok tunnel for public access"""
+    ngrok_token = os.environ.get("NGROK_TOKEN") or os.environ.get("NGROK_AUTHTOKEN")
+    if not ngrok_token:
+        return None
+    
+    try:
+        from pyngrok import ngrok, conf
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] 🌐 Setting up ngrok tunnel on port {port}...", flush=True)
+        
+        conf.get_default().auth_token = ngrok_token
+        
+        # Kill any existing tunnels
+        try:
+            ngrok.kill()
+        except:
+            pass
+        
+        public_url = ngrok.connect(port).public_url
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] \n🚀 Server is public at: {public_url}", flush=True)
+        print(f"[{timestamp}] \nTo use this with VideoLingo, update your config.yaml:", flush=True)
+        print(f"[{timestamp}]   cloud_native:", flush=True)
+        print(f"[{timestamp}]     cloud_url: {public_url}", flush=True)
+        print(f"[{timestamp}]     token: <your_token>\n", flush=True)
+        return public_url
+    except ImportError:
+        print("⚠️ pyngrok not installed, skipping ngrok tunnel setup.", flush=True)
+        return None
+    except Exception as e:
+        print(f"❌ Failed to start ngrok tunnel: {e}", flush=True)
+        return None
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     host = os.environ.get("HOST", "0.0.0.0")
     
     # Optional ngrok support
-    ngrok_token = os.environ.get("NGROK_TOKEN") or os.environ.get("NGROK_AUTHTOKEN")
-    if ngrok_token:
-        try:
-            from pyngrok import ngrok, conf
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] 🌐 Setting up ngrok tunnel on port {port}...", flush=True)
-            
-            conf.get_default().auth_token = ngrok_token
-            
-            # Kill any existing tunnels
-            try:
-                ngrok.kill()
-            except:
-                pass
-            
-            public_url = ngrok.connect(port).public_url
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] \n🚀 Server is public at: {public_url}", flush=True)
-            print(f"[{timestamp}] \nTo use this with VideoLingo, update your config.yaml:", flush=True)
-            print(f"[{timestamp}]   whisper:", flush=True)
-            print(f"[{timestamp}]     runtime: cloud", flush=True)
-            print(f"[{timestamp}]     whisperX_cloud_url: {public_url}", flush=True)
-            print(f"[{timestamp}]   demucs: cloud\n", flush=True)
-        except ImportError:
-            print("⚠️ pyngrok not installed, skipping ngrok tunnel setup.", flush=True)
-        except Exception as e:
-            print(f"❌ Failed to start ngrok tunnel: {e}", flush=True)
-
+    setup_ngrok_tunnel(port)
+    
     run_server(host=host, port=port)

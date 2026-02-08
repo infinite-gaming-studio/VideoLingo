@@ -85,7 +85,7 @@ def separate_audio_cloud(cloud_url: str = None):
     
     try:
         # Try unified client first
-        from videolingo_cloud.videolingo_cloud_client import separate_audio_cloud as cloud_separate
+        from videolingo_cloud.client import separate_audio_cloud as cloud_separate
         cloud_separate(
             audio_file=_RAW_AUDIO_FILE,
             vocals_output=_VOCAL_AUDIO_FILE,
