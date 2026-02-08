@@ -122,14 +122,17 @@ def split_for_sub_main():
         # 更新源数据继续下一轮分割
         src, trans = split_src, split_trans
 
+    # 使用最终的 src 和 trans（循环结束后的值）
+    split_src, split_trans, remerged = split_align_subs(src.copy(), trans)
+    
     # 确保二者有相同的长度，防止报错
-    if len(src) > len(remerged):
-        remerged += [None] * (len(src) - len(remerged))
-    elif len(remerged) > len(src):
-        src += [None] * (len(remerged) - len(src))
+    if len(split_src) > len(remerged):
+        remerged += [None] * (len(split_src) - len(remerged))
+    elif len(remerged) > len(split_src):
+        split_src += [None] * (len(remerged) - len(split_src))
     
     pd.DataFrame({'Source': split_src, 'Translation': split_trans}).to_excel(_5_SPLIT_SUB, index=False)
-    pd.DataFrame({'Source': src, 'Translation': remerged}).to_excel(_5_REMERGED, index=False)
+    pd.DataFrame({'Source': split_src, 'Translation': remerged}).to_excel(_5_REMERGED, index=False)
 
 if __name__ == '__main__':
     split_for_sub_main()
