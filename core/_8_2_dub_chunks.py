@@ -179,6 +179,14 @@ def gen_dub_chunks():
 
     for idx, row in df.iterrows():
         target = clean_text(row['text'])
+        
+        # Skip empty text rows
+        if not target:
+            rprint(f"[⚠️ Warning] Line {idx} has empty text, skipping...")
+            df.at[idx, 'lines'] = []
+            df.at[idx, 'src_lines'] = []
+            continue
+        
         matches = []
         current = ''
         match_indices = []  # Store indices for matching lines
