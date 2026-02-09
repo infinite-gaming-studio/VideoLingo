@@ -137,5 +137,19 @@
     "Speaker configurations saved!": "角色配置已保存！",
     "⚠️ 角色识别已启用，但未检测到角色信息。请检查音频质量或关闭角色识别。": "⚠️ 角色识别已启用，但未检测到角色信息。请检查音频质量或关闭角色识别。",
     "⚠️ 未检测到任何角色。请检查音频是否包含多人对话，或关闭角色识别。": "⚠️ 未检测到任何角色。请检查音频是否包含多人对话，或关闭角色识别。",
-    "🔄 检测到新视频，已重置角色语音配置": "🔄 检测到新视频，已重置角色语音配置"
+    "🔄 检测到新视频，已重置角色语音配置": "🔄 检测到新视频，已重置角色语音配置",
+    "Mode 1: Use default reference audio": "模式1：使用默认参考音频",
+    "Mode 2: Use first segment from video": "模式2：使用视频首段音频",
+    "Mode 3: Use corresponding segment": "模式3：使用对应分段音频",
+    "Mode 4: Use speaker-specific reference (Multi-role)": "模式4：使用角色专属参考音频（多角色模式）",
+    "Configure reference audio mode for IndexTTS": "配置 IndexTTS 参考音频模式",
+    "💡 Mode 4 requires speaker reference audio files. Place files named after speaker IDs (e.g., SPEAKER_00.wav, SPEAKER_01.wav) in output/audio/refers/ directory.": "💡 模式4需要角色参考音频文件。请将命名为角色ID的音频文件（例如：SPEAKER_00.wav、SPEAKER_01.wav）放入 output/audio/refers/ 目录。",
+    "Available reference files: ": "可用的参考文件：",
+    "IndexTTS Multi-role Mode: Upload or name reference audio for each character. The system will use the corresponding character's reference audio for voice cloning.": "IndexTTS 多角色模式：为每个角色上传或命名参考音频。系统将使用对应角色的参考音频进行声音克隆。",
+    "参考音频名称": "参考音频名称",
+    "使用角色ID作为参考音频名称": "使用角色ID作为参考音频名称",
+    "✅ 参考音频已配置": "✅ 参考音频已配置",
+    "⚠️ 需要参考音频": "⚠️ 需要参考音频",
+    "请上传": "请上传",
+    "到": "到"
 }
