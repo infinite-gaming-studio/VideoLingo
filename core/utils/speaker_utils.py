@@ -106,7 +106,7 @@ def get_speaker_profiles():
     for speaker, text in speaker_texts.items():
         prompt = get_speaker_profile_prompt(speaker, text, tts_method)
         try:
-            res = ask_gpt(prompt, response_json=True, log_title=f"profile_{speaker}")
+            res = ask_gpt(prompt, resp_type="json", log_title=f"profile_{speaker}")
             profiles[speaker] = res
         except Exception as e:
             print(f"Error profiling {speaker}: {e}")
