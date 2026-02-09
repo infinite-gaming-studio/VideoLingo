@@ -169,9 +169,12 @@ def gen_dub_chunks():
     last_idx = 0
 
     def clean_text(text):
-        """clean space and punctuation"""
+        """clean space, punctuation and speaker labels"""
         if not text or not isinstance(text, str):
             return ''
+        # First remove SPEAKER_XX labels (e.g., SPEAKER_01, SPEAKER_00)
+        text = re.sub(r'SPEAKER_\d+', '', text)
+        # Then remove punctuation and whitespace
         return re.sub(r'[^\w\s]|[\s]', '', text)
 
     for idx, row in df.iterrows():
