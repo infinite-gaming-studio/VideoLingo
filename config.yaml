@@ -70,6 +70,7 @@ f5tts:
   api_key: YOUR_API_KEY
 indextts:
   api_url: http://localhost:8000
+  api_token: ''
   emo_alpha: 1.0
   refer_mode: 2
   timeout: 60

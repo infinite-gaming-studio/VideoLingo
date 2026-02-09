@@ -35,7 +35,7 @@ def page_setting():
                 "azure_tts.api_key", "azure_tts.voice",
                 "gpt_sovits.character", "gpt_sovits.refer_mode",
                 "edge_tts.voice", "sf_cosyvoice2.api_key", "f5tts.302_api",
-                "indextts.api_url", "indextts.emo_alpha", "indextts.refer_mode", "indextts.timeout", "indextts.character"
+                "indextts.api_url", "indextts.api_token", "indextts.emo_alpha", "indextts.refer_mode", "indextts.timeout", "indextts.character"
             ]
 
             partial_config = {}
@@ -287,6 +287,7 @@ def page_setting():
         
         elif select_tts == "indextts":
             config_input(t("IndexTTS API URL"), "indextts.api_url", help=t("URL of the IndexTTS2 service, e.g., http://localhost:8000 or remote URL"))
+            config_input(t("IndexTTS API Token"), "indextts.api_token", help=t("Optional: Bearer token for API authentication (leave empty if no auth required)"))
             
             # Emotion alpha slider
             current_emo = load_key("indextts.emo_alpha")

@@ -20,6 +20,7 @@ class IndexTTSConfig:
     
     def __init__(self):
         self.api_url = self._load_url()
+        self.api_token = load_key("indextts.api_token", "")
         self.emo_alpha = load_key("indextts.emo_alpha", 1.0)
         self.refer_mode = load_key("indextts.refer_mode", 2)
         self.timeout = load_key("indextts.timeout", 60)
@@ -38,6 +39,13 @@ class IndexTTSConfig:
     @property
     def health_endpoint(self) -> str:
         return f"{self.api_url}/api/health"
+    
+    @property
+    def auth_headers(self) -> dict:
+        """Get authorization headers if token is configured."""
+        if self.api_token:
+            return {"Authorization": f"Bearer {self.api_token}"}
+        return {}
 
 
 def check_indextts_health(config: Optional[IndexTTSConfig] = None) -> dict:
@@ -54,10 +62,18 @@ def check_indextts_health(config: Optional[IndexTTSConfig] = None) -> dict:
     try:
         response = requests.get(
             config.health_endpoint,
+            headers=config.auth_headers,
             timeout=10
         )
         response.raise_for_status()
         return response.json()
+    except requests.exceptions.HTTPError as e:
+        if response.status_code == 401:
+            raise RuntimeError(
+                "IndexTTS API authentication failed. "
+                "Please check your API token configuration."
+            )
+        raise
     except requests.exceptions.ConnectionError:
         raise ConnectionError(
             f"Cannot connect to IndexTTS service at {config.api_url}. "
@@ -122,14 +138,20 @@ def indextts_tts(
             'emo_alpha': str(emo_alpha)
         }
         
+        # Prepare headers (Authorization if token configured)
+        headers = config.auth_headers
+        
         rprint(f"[blue]🎙️ Calling IndexTTS API...")
         rprint(f"[dim]   URL: {tts_url}")
         rprint(f"[dim]   Text length: {len(text)} chars")
         rprint(f"[dim]   Emo alpha: {emo_alpha}")
         rprint(f"[dim]   Ref audio: {ref_path.name}")
+        if config.api_token:
+            rprint(f"[dim]   Auth: Bearer token configured")
         
         response = requests.post(
             tts_url,
+            headers=headers,
             files=files,
             data=data,
             timeout=config.timeout
@@ -146,6 +168,12 @@ def indextts_tts(
         
         rprint(f"[green]✅ Audio saved: {output_path}")
         return True
+    
+    elif response.status_code == 401:
+        raise RuntimeError(
+            "IndexTTS API authentication failed (401). "
+            "Please check your API token configuration."
+        )
     
     elif response.status_code == 503:
         error_data = response.json()

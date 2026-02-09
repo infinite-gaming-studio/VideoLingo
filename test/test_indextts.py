@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Configuration
 API_URL = "https://subpericranial-jameson-guessingly.ngrok-free.dev"
+API_TOKEN = ""  # Set your token here if required
 DEMO_DIR = Path(__file__).parent.parent / "demo"
 OUTPUT_DIR = Path(__file__).parent / "output"
 
@@ -37,6 +38,13 @@ def convert_to_wav(input_path: Path, output_path: Path) -> bool:
         return False
 
 
+def get_auth_headers():
+    """Get authorization headers if token is configured."""
+    if API_TOKEN:
+        return {"Authorization": f"Bearer {API_TOKEN}"}
+    return {}
+
+
 def test_health_check():
     """Test the health check endpoint."""
     print("\n" + "="*60)
@@ -44,7 +52,8 @@ def test_health_check():
     print("="*60)
     
     try:
-        response = requests.get(f"{API_URL}/api/health", timeout=10)
+        headers = get_auth_headers()
+        response = requests.get(f"{API_URL}/api/health", headers=headers, timeout=10)
         response.raise_for_status()
         
         data = response.json()
@@ -55,6 +64,12 @@ def test_health_check():
         print(f"   Loaded: {data.get('loaded', False)}")
         return True
         
+    except requests.exceptions.HTTPError as e:
+        if response.status_code == 401:
+            print(f"❌ Authentication failed (401): Please check API_TOKEN")
+        else:
+            print(f"❌ HTTP error: {e}")
+        return False
     except requests.exceptions.ConnectionError as e:
         print(f"❌ Connection failed: {e}")
         return False
@@ -72,6 +87,8 @@ def test_tts_synthesis(text: str, ref_audio_path: Path, output_name: str, emo_al
     print(f"   Text: {text[:50]}...")
     print(f"   Reference: {ref_audio_path.name}")
     print(f"   Emo Alpha: {emo_alpha}")
+    if API_TOKEN:
+        print(f"   Auth: Bearer token configured")
     
     output_path = OUTPUT_DIR / f"{output_name}.wav"
     
@@ -84,9 +101,11 @@ def test_tts_synthesis(text: str, ref_audio_path: Path, output_name: str, emo_al
                 'text': text,
                 'emo_alpha': str(emo_alpha)
             }
+            headers = get_auth_headers()
             
             response = requests.post(
                 f"{API_URL}/api/tts",
+                headers=headers,
                 files=files,
                 data=data,
                 timeout=120
@@ -99,6 +118,10 @@ def test_tts_synthesis(text: str, ref_audio_path: Path, output_name: str, emo_al
             file_size = output_path.stat().st_size / 1024  # KB
             print(f"✅ Success! Output: {output_path.name} ({file_size:.1f} KB)")
             return True
+        
+        elif response.status_code == 401:
+            print(f"❌ Authentication failed (401): Please check API_TOKEN")
+            return False
             
         elif response.status_code == 503:
             error_data = response.json()
