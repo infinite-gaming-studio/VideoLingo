@@ -197,7 +197,7 @@ def merge_chunks(tasks_df: pd.DataFrame) -> pd.DataFrame:
             # 🔄 Step5: Check if the last row exceeds the range
             if cur_time > chunk_end_time:
                 time_diff = cur_time - chunk_end_time
-                if time_diff <= 0.6:  # If exceeding time is within 0.6 seconds, truncate the last audio
+                if time_diff <= 2.0:  # If exceeding time is within 2.0 seconds, truncate the last audio
                     rprint(f"[yellow]⚠️ Chunk {chunk_start} to {index} exceeds by {time_diff:.3f}s, truncating last audio[/yellow]")
                     # Get the last audio file
                     last_number = tasks_df.iloc[index]['number']
@@ -208,7 +208,7 @@ def merge_chunks(tasks_df: pd.DataFrame) -> pd.DataFrame:
                     # Calculate the duration to keep
                     audio = AudioSegment.from_wav(last_file)
                     original_duration = len(audio) / 1000  # Convert to seconds
-                    new_duration = original_duration - time_diff
+                    new_duration = max(0.1, original_duration - time_diff)  # Ensure at least 0.1s
                     trimmed_audio = audio[:(new_duration * 1000)]  # pydub uses milliseconds
                     trimmed_audio.export(last_file, format="wav")
                     
@@ -217,7 +217,35 @@ def merge_chunks(tasks_df: pd.DataFrame) -> pd.DataFrame:
                     last_times[-1][1] = chunk_end_time
                     tasks_df.at[index, 'new_sub_times'] = last_times
                 else:
-                    raise Exception(f"Chunk {chunk_start} to {index} exceeds the chunk end time {chunk_end_time:.2f} seconds with current time {cur_time:.2f} seconds")
+                    # Try to reprocess with a faster speed factor
+                    rprint(f"[yellow]⚠️ Chunk {chunk_start} to {index} exceeds by {time_diff:.3f}s, retrying with faster speed...[/yellow]")
+                    # Calculate required speed factor to fit within the chunk
+                    required_speed = cur_time / chunk_end_time * speed_factor * 1.05  # Add 5% margin
+                    required_speed = min(required_speed, accept)  # Cap at accept limit
+                    
+                    # Reprocess the entire chunk with faster speed
+                    cur_time = chunk_start_time
+                    for i, row in chunk_df.iterrows():
+                        if i != 0 and keep_gaps:
+                            cur_time += chunk_df.iloc[i-1]['gap']/required_speed
+                        new_sub_times = []
+                        number = row['number']
+                        lines = eval(row['lines']) if isinstance(row['lines'], str) else row['lines']
+                        for line_index, line in enumerate(lines):
+                            temp_file = TEMP_FILE_TEMPLATE.format(f"{number}_{line_index}")
+                            output_file = OUTPUT_FILE_TEMPLATE.format(f"{number}_{line_index}")
+                            adjust_audio_speed(temp_file, output_file, required_speed)
+                            ad_dur = get_audio_duration(output_file)
+                            new_sub_times.append([cur_time, cur_time+ad_dur])
+                            cur_time += ad_dur
+                        main_df_idx = tasks_df[tasks_df['number'] == row['number']].index[0]
+                        tasks_df.at[main_df_idx, 'new_sub_times'] = new_sub_times
+                    
+                    rprint(f"[green]✅ Retried chunk {chunk_start} to {index} with speed factor {required_speed:.3f}[/green]")
+                    
+                    # Check again after retry
+                    if cur_time > chunk_end_time + 2.0:
+                        raise Exception(f"Chunk {chunk_start} to {index} still exceeds the chunk end time {chunk_end_time:.2f} seconds with current time {cur_time:.2f} seconds after retry")
             chunk_start = index+1
     
     rprint("[bold green]✅ Audio chunks processing completed![/bold green]")
