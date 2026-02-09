@@ -79,9 +79,17 @@ def separate_audio_cloud(cloud_url: str = None):
     
     if not url:
         raise ValueError(
-            "Cloud URL not configured. Set whisper.whisperX_cloud_url in config.yaml "
+            "Cloud URL not configured. Set cloud_native.cloud_url in config.yaml "
             "or DEMUCS_CLOUD_URL env var"
         )
+    
+    # Get timeout from config
+    timeout = None
+    try:
+        from core.utils import load_key
+        timeout = load_key("cloud_native.timeout", None)
+    except:
+        pass
     
     try:
         # Try unified client first
@@ -90,7 +98,8 @@ def separate_audio_cloud(cloud_url: str = None):
             audio_file=_RAW_AUDIO_FILE,
             vocals_output=_VOCAL_AUDIO_FILE,
             background_output=_BACKGROUND_AUDIO_FILE,
-            cloud_url=url
+            cloud_url=url,
+            timeout=timeout
         )
     except ImportError:
         # Fallback: inline implementation

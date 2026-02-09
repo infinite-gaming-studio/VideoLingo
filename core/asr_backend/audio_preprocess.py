@@ -48,9 +48,24 @@ def get_audio_duration(audio_file: str) -> float:
         duration = 0
     return duration
 
-def split_audio(audio_file: str, target_len: float = 30*60, win: float = 60) -> List[Tuple[float, float]]:
+def split_audio(audio_file: str, target_len: float = None, win: float = 60) -> List[Tuple[float, float]]:
     ## 在 [target_len-win, target_len+win] 区间内用 pydub 检测静默，切分音频
-    rprint(f"[blue]🎙️ Starting audio segmentation {audio_file} {target_len} {win}[/blue]")
+    
+    # Check if cloud mode is enabled - use shorter segments for cloud processing
+    # to avoid timeouts
+    if target_len is None:
+        try:
+            from core.utils import load_key
+            if load_key("whisper.runtime", "") == "cloud":
+                # Cloud mode: use configured segment length or default to 10 minutes
+                target_len = load_key("cloud_native.segment_length", 600)
+                rprint(f"[cyan]☁️ Cloud mode detected: using {target_len/60:.0f}-minute segments[/cyan]")
+            else:
+                target_len = 30 * 60  # 30 minutes for local processing
+        except:
+            target_len = 30 * 60
+    
+    rprint(f"[blue]🎙️ Starting audio segmentation {audio_file} target_len={target_len}s win={win}s[/blue]")
     audio = AudioSegment.from_file(audio_file)
     duration = float(mediainfo(audio_file)["duration"])
     if duration <= target_len + win:

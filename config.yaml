@@ -18,6 +18,12 @@ whisper:
 cloud_native:
   cloud_url: https://adiaphoristic-zaire-reminiscently.ngrok-free.dev
   token: YOUR_TOKEN_HERE
+  # Timeout configuration for cloud ASR (in seconds)
+  # Default: 600 (10 minutes). Increase this if processing long audio files
+  timeout: 600
+  # Audio segment length for cloud processing (in seconds)
+  # Default: 600 (10 minutes). Shorter segments process faster but create more requests
+  segment_length: 600
 demucs: true
 burn_subtitles: true
 ffmpeg_gpu: false

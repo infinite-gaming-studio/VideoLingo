@@ -25,7 +25,7 @@ except ImportError:
         return default
 
 # API Configuration
-DEFAULT_TIMEOUT = 300
+DEFAULT_TIMEOUT = 600  # Increased from 300 to 600 seconds (10 minutes) for long audio files
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 
@@ -115,11 +115,29 @@ def transcribe_audio_cloud(
     speaker_diarization: bool = False,
     min_speakers: Optional[int] = None,
     max_speakers: Optional[int] = None,
-    timeout: int = DEFAULT_TIMEOUT,
+    timeout: int = None,  # Will use config or dynamic timeout based on audio length
     token: str = None
 ) -> Dict[str, Any]:
     """Transcribe audio using cloud ASR service"""
     url = cloud_url or get_cloud_url()
+    
+    # Get timeout from config if not provided
+    if timeout is None:
+        try:
+            timeout = load_key("cloud_native.timeout", None)
+        except:
+            pass
+    
+    # Calculate dynamic timeout based on audio segment length
+    # WhisperX typically needs ~1-2x real-time, diarization adds more time
+    segment_duration = end - start
+    if timeout is None:
+        if speaker_diarization:
+            # Diarization takes longer, especially for long audio
+            timeout = max(DEFAULT_TIMEOUT, int(segment_duration * 2.5))
+        else:
+            timeout = max(DEFAULT_TIMEOUT, int(segment_duration * 1.5))
+    rprint(f"[dim]⏱️ Timeout: {timeout}s for {segment_duration:.1f}s audio segment[/dim]")
 
     if not url:
         raise ValueError("No cloud URL configured")
@@ -230,7 +248,7 @@ def separate_audio_cloud(
     vocals_output: str,
     background_output: str,
     cloud_url: str = None,
-    timeout: int = DEFAULT_TIMEOUT,
+    timeout: int = None,  # Will use dynamic timeout based on audio length
     token: str = None
 ) -> bool:
     """Separate audio using cloud separation service"""
@@ -241,6 +259,21 @@ def separate_audio_cloud(
     
     if not os.path.exists(audio_file):
         raise FileNotFoundError(f"Audio file not found: {audio_file}")
+    
+    # Calculate dynamic timeout based on audio file duration
+    # Demucs typically needs ~0.5-1x real-time
+    try:
+        import subprocess
+        cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
+               '-of', 'default=noprint_wrappers=1:nokey=1', audio_file]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        duration = float(result.stdout.strip())
+        if timeout is None:
+            timeout = max(DEFAULT_TIMEOUT, int(duration * 1.5))
+            rprint(f"[dim]⏱️ Calculated timeout: {timeout}s for {duration:.1f}s audio[/dim]")
+    except Exception:
+        if timeout is None:
+            timeout = DEFAULT_TIMEOUT
     
     rprint(f"[cyan]Input:[/cyan] {audio_file}")
     
