@@ -74,8 +74,7 @@ def text_processing_section():
                 process_text()
                 st.rerun()
         else:
-            if load_key("burn_subtitles"):
-                st.video(SUB_VIDEO)
+            st.video(SUB_VIDEO)
             download_subtitle_zip_button(text=t("Download All Srt Files"))
             
             if st.button(t("Archive to 'history'"), key="cleanup_in_text_processing"):
@@ -127,8 +126,7 @@ def audio_processing_section():
                 st.info(t("Please configure speaker voices above before starting audio processing."))
         else:
             st.success(t("Audio processing is complete! You can check the audio files in the `output` folder."))
-            if load_key("burn_subtitles"):
-                st.video(DUB_VIDEO) 
+            st.video(DUB_VIDEO)
             if st.button(t("Delete dubbing files"), key="delete_dubbing_files"):
                 delete_dubbing_files()
                 st.rerun()
