@@ -68,6 +68,12 @@ gpt_sovits:
   refer_mode: 3
 f5tts:
   api_key: YOUR_API_KEY
+indextts:
+  api_url: http://localhost:8000
+  emo_alpha: 1.0
+  refer_mode: 2
+  timeout: 60
+  character: default
 model_dir: /app/models
 batch_size: 1
 compute_type: int8

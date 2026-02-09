@@ -87,6 +87,7 @@ def get_voice_list(tts_method):
         'f5_tts': ['Default'],  # F5-TTS uses reference audio
         'fish_tts': ['Default'],  # Fish TTS uses reference audio
         'custom_tts': ['Default'],  # Custom TTS defined by user
+        'indextts': ['Default'],  # IndexTTS uses reference audio for voice cloning
     }
     return voice_lists.get(tts_method, [])
 

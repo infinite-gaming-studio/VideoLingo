@@ -34,7 +34,8 @@ def page_setting():
                 "azure_tts.api_key", "azure_tts.voice",
                 "azure_tts.api_key", "azure_tts.voice",
                 "gpt_sovits.character", "gpt_sovits.refer_mode",
-                "edge_tts.voice", "sf_cosyvoice2.api_key", "f5tts.302_api"
+                "edge_tts.voice", "sf_cosyvoice2.api_key", "f5tts.302_api",
+                "indextts.api_url", "indextts.emo_alpha", "indextts.refer_mode", "indextts.timeout", "indextts.character"
             ]
 
             partial_config = {}
@@ -216,7 +217,7 @@ def page_setting():
                 config_input(t("Cloud Service URL"), "cloud_native.cloud_url", help=t("URL for both WhisperX and Demucs cloud services"))
                 config_input(t("Authentication Token"), "cloud_native.token", help=t("Token for cloud services authentication"))
     with st.expander(t("Dubbing Settings"), expanded=True):
-        tts_methods = ["azure_tts", "openai_tts", "fish_tts", "sf_fish_tts", "edge_tts", "gpt_sovits", "custom_tts", "sf_cosyvoice2", "f5tts"]
+        tts_methods = ["azure_tts", "openai_tts", "fish_tts", "sf_fish_tts", "edge_tts", "gpt_sovits", "custom_tts", "sf_cosyvoice2", "f5tts", "indextts"]
         select_tts = st.selectbox(t("TTS Method"), options=tts_methods, index=tts_methods.index(load_key("tts_method")))
         if select_tts != load_key("tts_method"):
             update_key("tts_method", select_tts)
@@ -283,6 +284,71 @@ def page_setting():
         
         elif select_tts == "f5tts":
             config_input("302ai API", "f5tts.302_api")
+        
+        elif select_tts == "indextts":
+            config_input(t("IndexTTS API URL"), "indextts.api_url", help=t("URL of the IndexTTS2 service, e.g., http://localhost:8000 or remote URL"))
+            
+            # Emotion alpha slider
+            current_emo = load_key("indextts.emo_alpha")
+            emo_alpha = st.slider(
+                t("Emotion Alpha"),
+                min_value=0.0,
+                max_value=2.0,
+                value=float(current_emo) if current_emo is not None else 1.0,
+                step=0.1,
+                help=t("Emotion intensity (0.0-2.0). Higher = more emotional expression. Default: 1.0")
+            )
+            if emo_alpha != load_key("indextts.emo_alpha"):
+                update_key("indextts.emo_alpha", emo_alpha)
+                st.rerun()
+            
+            # Reference mode selection
+            refer_mode_options = {
+                1: t("Mode 1: Use default reference audio"),
+                2: t("Mode 2: Use first segment from video"),
+                3: t("Mode 3: Use corresponding segment")
+            }
+            current_mode = load_key("indextts.refer_mode")
+            if current_mode is None:
+                current_mode = 2
+            selected_refer_mode = st.selectbox(
+                t("Reference Mode"),
+                options=list(refer_mode_options.keys()),
+                format_func=lambda x: refer_mode_options[x],
+                index=list(refer_mode_options.keys()).index(current_mode) if current_mode in refer_mode_options else 1,
+                help=t("Configure reference audio mode for IndexTTS")
+            )
+            if selected_refer_mode != load_key("indextts.refer_mode"):
+                update_key("indextts.refer_mode", selected_refer_mode)
+                st.rerun()
+            
+            # Mode 1: Character name input
+            if selected_refer_mode == 1:
+                config_input(t("Character Name"), "indextts.character", help=t("Name for default reference audio file lookup"))
+            
+            # Timeout configuration
+            timeout = st.number_input(
+                t("API Timeout (seconds)"),
+                value=int(load_key("indextts.timeout", 60)),
+                min_value=10,
+                max_value=300,
+                step=10,
+                help=t("Maximum wait time for API response")
+            )
+            if timeout != load_key("indextts.timeout"):
+                update_key("indextts.timeout", timeout)
+                st.rerun()
+            
+            # Connection test button
+            if st.button(t("🔄 Test Connection"), key="test_indextts", use_container_width=True):
+                try:
+                    from core.tts_backend.indextts_tts import test_indextts_connection
+                    if test_indextts_connection():
+                        st.success(t("Connection successful!"))
+                    else:
+                        st.error(t("Connection failed. Please check the API URL."))
+                except Exception as e:
+                    st.error(f"{t('Connection failed')}: {str(e)}")
         
 def check_api():
     try:
