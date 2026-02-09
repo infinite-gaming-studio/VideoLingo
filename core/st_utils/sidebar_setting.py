@@ -5,6 +5,7 @@ import json
 import yaml as pyyaml # For safe dumping logic if needed
 from ruamel.yaml import YAML
 import time
+from pathlib import Path
 from core.utils import *
 
 def config_input(label, key, help=None):
@@ -307,7 +308,8 @@ def page_setting():
             refer_mode_options = {
                 1: t("Mode 1: Use default reference audio"),
                 2: t("Mode 2: Use first segment from video"),
-                3: t("Mode 3: Use corresponding segment")
+                3: t("Mode 3: Use corresponding segment"),
+                4: t("Mode 4: Use speaker-specific reference (Multi-role)")
             }
             current_mode = load_key("indextts.refer_mode")
             if current_mode is None:
@@ -326,6 +328,16 @@ def page_setting():
             # Mode 1: Character name input
             if selected_refer_mode == 1:
                 config_input(t("Character Name"), "indextts.character", help=t("Name for default reference audio file lookup"))
+            
+            # Mode 4: Multi-role reference audio info
+            if selected_refer_mode == 4:
+                st.info(t("💡 Mode 4 requires speaker reference audio files. Place files named after speaker IDs (e.g., SPEAKER_00.wav, SPEAKER_01.wav) in output/audio/refers/ directory."))
+                # Show current refers directory contents if available
+                refers_dir = Path("output/audio/refers")
+                if refers_dir.exists():
+                    wav_files = list(refers_dir.glob("*.wav")) + list(refers_dir.glob("*.mp3"))
+                    if wav_files:
+                        st.caption(t("Available reference files: ") + ", ".join([f.name for f in wav_files]))
             
             # Timeout configuration
             timeout = st.number_input(

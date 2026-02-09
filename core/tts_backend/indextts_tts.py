@@ -251,40 +251,86 @@ def _get_mode2_ref_audio() -> str:
 def _get_mode3_ref_audio(number: int) -> str:
     """Get reference audio for Mode 3 (segment-specific)."""
     ref_path = Path(_AUDIO_REFERS_DIR) / f"{number}.wav"
-    
+
     if not ref_path.exists():
         # Fallback to mode 2
         rprint(f"[yellow]⚠️ Segment {number} ref audio not found, falling back to mode 2[/yellow]")
         return _get_mode2_ref_audio()
-    
+
     return str(ref_path)
+
+
+def _get_mode4_ref_audio(speaker_id: str) -> str:
+    """Get reference audio for Mode 4 (speaker-specific multi-role).
+    
+    Mode 4: Uses speaker-specific reference audio for multi-role dubbing.
+    Reference audio files should be named after speaker_id in output/audio/refers/
+    """
+    if not speaker_id:
+        rprint(f"[yellow]⚠️ No speaker_id provided for Mode 4, falling back to mode 2[/yellow]")
+        return _get_mode2_ref_audio()
+    
+    # Priority 1: Direct speaker_id match (e.g., SPEAKER_00.wav)
+    ref_path = Path(_AUDIO_REFERS_DIR) / f"{speaker_id}.wav"
+    if ref_path.exists():
+        return str(ref_path)
+    
+    # Priority 2: Try mp3 format
+    ref_path_mp3 = Path(_AUDIO_REFERS_DIR) / f"{speaker_id}.mp3"
+    if ref_path_mp3.exists():
+        return str(ref_path_mp3)
+    
+    # Priority 3: Load speaker mappings and find mapped character
+    try:
+        from core.utils.speaker_utils import load_speaker_mappings
+        mappings = load_speaker_mappings()
+        if speaker_id in mappings:
+            mapped_character = mappings[speaker_id]
+            # Try to find reference audio for the mapped character
+            char_path_wav = Path(_AUDIO_REFERS_DIR) / f"{mapped_character}.wav"
+            if char_path_wav.exists():
+                rprint(f"[blue]📀 Using mapped character reference for {speaker_id} -> {mapped_character}")
+                return str(char_path_wav)
+            char_path_mp3 = Path(_AUDIO_REFERS_DIR) / f"{mapped_character}.mp3"
+            if char_path_mp3.exists():
+                rprint(f"[blue]📀 Using mapped character reference for {speaker_id} -> {mapped_character}")
+                return str(char_path_mp3)
+    except Exception as e:
+        rprint(f"[yellow]⚠️ Failed to load speaker mappings: {e}[/yellow]")
+    
+    # Fallback to mode 2
+    rprint(f"[yellow]⚠️ No reference audio found for speaker {speaker_id}, falling back to mode 2[/yellow]")
+    return _get_mode2_ref_audio()
 
 
 def indextts_tts_for_videolingo(
     text: str,
     save_as: str,
     number: int,
-    task_df
+    task_df,
+    speaker_id: str = None
 ) -> bool:
     """
-    IndexTTS integration for VideoLingo with 3 reference modes.
-    
+    IndexTTS integration for VideoLingo with 4 reference modes.
+
     Reference Modes:
-        1. Use configured default reference audio
-        2. Use first segment from video as reference
-        3. Use corresponding segment as reference
-    
+    1. Use configured default reference audio
+    2. Use first segment from video as reference
+    3. Use corresponding segment as reference
+    4. Use speaker-specific reference audio (multi-role support)
+
     Args:
         text: Text to synthesize
         save_as: Output file path
         number: Segment number
         task_df: Task DataFrame with segment info
-    
+        speaker_id: Speaker ID for multi-role mode (Mode 4)
+
     Returns:
         bool: True if successful
     """
     config = IndexTTSConfig()
-    
+
     # Pre-flight health check
     try:
         health = check_indextts_health(config)
@@ -294,29 +340,44 @@ def indextts_tts_for_videolingo(
     except ConnectionError as e:
         rprint(f"[bold red]❌ {e}[/bold red]")
         raise
-    
+
     # Determine reference audio based on mode
     refer_mode = config.refer_mode
-    
+
     if refer_mode == 1:
         # Mode 1: Default reference audio
         character = load_key("indextts.character", "default")
         ref_audio = _find_default_ref_audio(character)
         rprint(f"[blue]📀 Using default reference (Mode 1): {character}")
-        
+
     elif refer_mode == 2:
         # Mode 2: First video segment
         ref_audio = _get_mode2_ref_audio()
         rprint(f"[blue]📀 Using video first segment (Mode 2)")
-        
+
     elif refer_mode == 3:
         # Mode 3: Segment-specific reference
         ref_audio = _get_mode3_ref_audio(number)
         rprint(f"[blue]📀 Using segment-specific reference (Mode 3): #{number}")
+
+    elif refer_mode == 4:
+        # Mode 4: Speaker-specific reference (multi-role)
+        if not speaker_id:
+            # Try to get speaker_id from task_df
+            try:
+                if task_df is not None and 'speaker_id' in task_df.columns:
+                    speaker_row = task_df[task_df['number'] == number]
+                    if not speaker_row.empty:
+                        speaker_id = speaker_row['speaker_id'].values[0]
+            except Exception as e:
+                rprint(f"[yellow]⚠️ Failed to get speaker_id from task_df: {e}[/yellow]")
         
+        ref_audio = _get_mode4_ref_audio(speaker_id)
+        rprint(f"[blue]📀 Using speaker-specific reference (Mode 4): {speaker_id}")
+
     else:
-        raise ValueError(f"Invalid refer_mode: {refer_mode}. Choose 1, 2, or 3.")
-    
+        raise ValueError(f"Invalid refer_mode: {refer_mode}. Choose 1, 2, 3, or 4.")
+
     # Call TTS API
     success = indextts_tts(
         text=text,
@@ -324,7 +385,7 @@ def indextts_tts_for_videolingo(
         ref_audio_path=str(ref_audio),
         emo_alpha=config.emo_alpha
     )
-    
+
     # Fallback for mode 3: if segment-specific fails, try mode 2
     if not success and refer_mode == 3:
         rprint(f"[yellow]⚠️ Mode 3 failed, falling back to Mode 2...[/yellow]")
@@ -335,7 +396,18 @@ def indextts_tts_for_videolingo(
             ref_audio_path=str(ref_audio),
             emo_alpha=config.emo_alpha
         )
-    
+
+    # Fallback for mode 4: if speaker-specific fails, try mode 2
+    if not success and refer_mode == 4:
+        rprint(f"[yellow]⚠️ Mode 4 failed, falling back to Mode 2...[/yellow]")
+        ref_audio = _get_mode2_ref_audio()
+        success = indextts_tts(
+            text=text,
+            save_path=save_as,
+            ref_audio_path=str(ref_audio),
+            emo_alpha=config.emo_alpha
+        )
+
     return success
 
 

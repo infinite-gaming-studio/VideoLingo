@@ -75,15 +75,22 @@ def speaker_configuration_ui():
             st.session_state.speaker_profiles = get_speaker_profiles()
     
     profiles = st.session_state.speaker_profiles
-    
+
     tts_method = load_key("tts_method")
     voice_options = get_voice_list(tts_method)
     
+    # Check if using IndexTTS Mode 4 (speaker-specific reference)
+    is_indextts_mode4 = (tts_method == "indextts" and load_key("indextts.refer_mode") == 4)
+
     new_mappings = {}
-    
+
     # Display speaker configuration table
     st.markdown("### 🎭 角色配置")
-    st.info("💡 提示：先听每个角色的音频样本，确认是否为同一人。如果多个角色实际上是同一人，请使用上方的『说话者管理工具』进行合并。")
+    
+    if is_indextts_mode4:
+        st.info("💡 IndexTTS 多角色模式：为每个角色上传或命名参考音频。系统将使用对应角色的参考音频进行声音克隆。")
+    else:
+        st.info("💡 提示：先听每个角色的音频样本，确认是否为同一人。如果多个角色实际上是同一人，请使用上方的『说话者管理工具』进行合并。")
     
     for speaker in unique_speakers:
         with st.container(border=True):
@@ -96,9 +103,21 @@ def speaker_configuration_ui():
                 st.caption(f"{line_count} 句台词")
             
             with col2:
-                audio_path = os.path.join(_AUDIO_REFERS_DIR, f"{speaker}.mp3")
-                if os.path.exists(audio_path):
-                    st.audio(audio_path)
+                # Check for both wav and mp3 reference files
+                audio_path_mp3 = os.path.join(_AUDIO_REFERS_DIR, f"{speaker}.mp3")
+                audio_path_wav = os.path.join(_AUDIO_REFERS_DIR, f"{speaker}.wav")
+                
+                if os.path.exists(audio_path_mp3):
+                    st.audio(audio_path_mp3)
+                    if is_indextts_mode4:
+                        st.caption("✅ 参考音频已配置")
+                elif os.path.exists(audio_path_wav):
+                    st.audio(audio_path_wav)
+                    if is_indextts_mode4:
+                        st.caption("✅ 参考音频已配置")
+                elif is_indextts_mode4:
+                    st.warning("⚠️ 需要参考音频")
+                    st.caption(f"请上传 {speaker}.wav 或 {speaker}.mp3 到 output/audio/refers/")
                 else:
                     st.warning("No sample")
             
@@ -109,14 +128,20 @@ def speaker_configuration_ui():
                 st.caption(f"Choice: {rec_voice}")
             
             with col4:
-                default_voice = existing_mappings.get(speaker, rec_voice if rec_voice in voice_options else voice_options[0] if voice_options else "")
-                selected = st.selectbox(
-                    t("Select Voice"),
-                    options=voice_options,
-                    index=voice_options.index(default_voice) if default_voice in voice_options else 0,
-                    key=f"select_{speaker}"
-                )
-                new_mappings[speaker] = selected
+                if is_indextts_mode4:
+                    # For IndexTTS Mode 4, mapping is the reference audio name (same as speaker_id)
+                    st.write(f"**参考音频名称**: `{speaker}`")
+                    st.caption("使用角色ID作为参考音频名称")
+                    new_mappings[speaker] = speaker  # Map speaker to itself (reference audio name)
+                else:
+                    default_voice = existing_mappings.get(speaker, rec_voice if rec_voice in voice_options else voice_options[0] if voice_options else "")
+                    selected = st.selectbox(
+                        t("Select Voice"),
+                        options=voice_options,
+                        index=voice_options.index(default_voice) if default_voice in voice_options else 0,
+                        key=f"select_{speaker}"
+                    )
+                    new_mappings[speaker] = selected
     
     if st.button(t("Confirm Speaker Configurations"), key="confirm_speaker_configs", type="primary"):
         save_speaker_mappings(new_mappings)

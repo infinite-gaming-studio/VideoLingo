@@ -89,7 +89,7 @@ def tts_main(text, save_as, number, task_df):
             elif TTS_METHOD == 'f5tts':
                 f5_tts_for_videolingo(text, save_as, number, task_df)
             elif TTS_METHOD == 'indextts':
-                indextts_tts_for_videolingo(text, save_as, number, task_df)
+                indextts_tts_for_videolingo(text, save_as, number, task_df, speaker_id)
                 
             # Check generated audio duration
             duration = get_audio_duration(save_as)

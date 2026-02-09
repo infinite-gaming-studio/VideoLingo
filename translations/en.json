@@ -115,5 +115,13 @@
     "Enable speaker diarization (multi-role detection). Cloud runtime only.": "Enable speaker diarization (multi-role detection). Cloud runtime only.",
     "Min Speakers": "Min Speakers",
     "Max Speakers": "Max Speakers",
-    "Set the range of speakers for diarization.": "Set the range of speakers for diarization."
+    "Set the range of speakers for diarization.": "Set the range of speakers for diarization.",
+    "Mode 1: Use default reference audio": "Mode 1: Use default reference audio",
+    "Mode 2: Use first segment from video": "Mode 2: Use first segment from video",
+    "Mode 3: Use corresponding segment": "Mode 3: Use corresponding segment",
+    "Mode 4: Use speaker-specific reference (Multi-role)": "Mode 4: Use speaker-specific reference (Multi-role)",
+    "Configure reference audio mode for IndexTTS": "Configure reference audio mode for IndexTTS",
+    "💡 Mode 4 requires speaker reference audio files. Place files named after speaker IDs (e.g., SPEAKER_00.wav, SPEAKER_01.wav) in output/audio/refers/ directory.": "💡 Mode 4 requires speaker reference audio files. Place files named after speaker IDs (e.g., SPEAKER_00.wav, SPEAKER_01.wav) in output/audio/refers/ directory.",
+    "Available reference files: ": "Available reference files: ",
+    "IndexTTS 多角色模式：为每个角色上传或命名参考音频。系统将使用对应角色的参考音频进行声音克隆。": "IndexTTS Multi-role Mode: Upload or name reference audio for each character. The system will use the corresponding character's reference audio for voice cloning."
 }

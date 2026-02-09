@@ -10,35 +10,40 @@ def extract_speaker_snippets():
     if not os.path.exists(_6_ALIGNED_FOR_AUDIO) or not os.path.exists(_VOCAL_AUDIO_FILE):
         print("[yellow]⚠️ Cannot extract speaker snippets: aligned file or vocal audio not found[/yellow]")
         return
-    
+
     os.makedirs(_AUDIO_REFERS_DIR, exist_ok=True)
     try:
         df = pd.read_excel(_6_ALIGNED_FOR_AUDIO)
     except Exception as e:
         print(f"[red]❌ Error reading aligned file: {e}[/red]")
         return
-    
+
     if 'speaker_id' not in df.columns:
         print("[yellow]⚠️ No speaker_id column found, skipping snippet extraction[/yellow]")
         return
 
     unique_speakers = df['speaker_id'].dropna().unique()
     print(f"[cyan]🎵 Extracting audio snippets for {len(unique_speakers)} speakers...[/cyan]")
-    
+
     for speaker in unique_speakers:
-        output_path = os.path.join(_AUDIO_REFERS_DIR, f"{speaker}.mp3")
-        if os.path.exists(output_path):
+        # Skip if any reference already exists for this speaker
+        output_path_mp3 = os.path.join(_AUDIO_REFERS_DIR, f"{speaker}.mp3")
+        output_path_wav = os.path.join(_AUDIO_REFERS_DIR, f"{speaker}.wav")
+        
+        # Check if user has already provided a custom reference audio
+        if os.path.exists(output_path_mp3) or os.path.exists(output_path_wav):
+            print(f"[dim]⏭️ Skipping {speaker}: reference audio already exists[/dim]")
             continue
-            
+
         try:
             # Find the first occurrence with sufficient duration
             sample_row = df[df['speaker_id'] == speaker].iloc[0]
             start_time = sample_row['timestamp'].split(' --> ')[0].replace(',', '.')
-            
+
             # Extract 3 seconds using ffmpeg
             cmd = [
-                'ffmpeg', '-y', '-ss', start_time, '-t', '3', 
-                '-i', _VOCAL_AUDIO_FILE, '-acodec', 'libmp3lame', output_path
+                'ffmpeg', '-y', '-ss', start_time, '-t', '3',
+                '-i', _VOCAL_AUDIO_FILE, '-acodec', 'libmp3lame', output_path_mp3
             ]
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
@@ -47,7 +52,7 @@ def extract_speaker_snippets():
                 print(f"[yellow]⚠️ Failed to extract snippet for {speaker}: {result.stderr[:100]}[/yellow]")
         except Exception as e:
             print(f"[red]❌ Error extracting snippet for {speaker}: {e}[/red]")
-    
+
     print(f"[green]✅ Speaker snippets saved to {_AUDIO_REFERS_DIR}[/green]")
 
 from core.prompts import ask_gpt, get_speaker_profile_prompt
