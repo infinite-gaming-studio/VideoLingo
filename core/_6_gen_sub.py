@@ -153,7 +153,8 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
         df_trans_time['Translation'] = df_trans_time['Translation'].apply(lambda x: re.sub(r'[，。]', ' ', x).strip())
 
     # Output subtitles 📜
-    diarization_enabled = load_key("whisper.diarization", False)
+    # Note: speaker_id is maintained in DataFrame for internal TTS mapping,
+    # but not added to subtitle text to keep subtitles clean
     
     def generate_subtitle_string(df, columns):
         res = ""
@@ -161,8 +162,6 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
             lines = []
             for col in columns:
                 text = str(row[col]).strip()
-                if diarization_enabled and 'speaker_id' in row and row['speaker_id'] is not None:
-                    text = f"[{row['speaker_id']}]: {text}"
                 lines.append(text)
             res += f"{i+1}\n{row['timestamp']}\n" + "\n".join(lines) + "\n\n"
         return res.strip()

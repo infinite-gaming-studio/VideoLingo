@@ -17,7 +17,10 @@ from core.tts_backend._302_f5tts import f5_tts_for_videolingo
 from core.utils import *
 
 def clean_text_for_tts(text):
-    """Remove problematic characters for TTS"""
+    """Remove problematic characters and speaker labels for TTS"""
+    # Remove speaker labels like [SPEAKER_01]: or [SPEAKER_00]:
+    text = re.sub(r'\[SPEAKER_\d+\]:?\s*', '', text)
+    # Remove other problematic characters
     chars_to_remove = ['&', '®', '™', '©']
     for char in chars_to_remove:
         text = text.replace(char, '')

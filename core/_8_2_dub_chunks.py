@@ -177,6 +177,14 @@ def gen_dub_chunks():
         # Then remove punctuation and whitespace
         return re.sub(r'[^\w\s]|[\s]', '', text)
 
+    def clean_text_for_output(text):
+        """Remove speaker labels from text for TTS and subtitles, keep punctuation"""
+        if not text or not isinstance(text, str):
+            return ''
+        # Remove [SPEAKER_XX]: pattern
+        text = re.sub(r'\[SPEAKER_\d+\]:?\s*', '', text)
+        return text.strip()
+
     for idx, row in df.iterrows():
         target = clean_text(row['text'])
         
@@ -195,12 +203,12 @@ def gen_dub_chunks():
             line = content_lines[i]
             cleaned_line = clean_text(line)
             current += cleaned_line
-            matches.append(line)  # 存储原始文本
+            matches.append(clean_text_for_output(line))  # 存储清理后的文本（移除speaker标记）
             match_indices.append(i)
             
             if current == target:
                 df.at[idx, 'lines'] = matches
-                df.at[idx, 'src_lines'] = [ori_content_lines[i] for i in match_indices]
+                df.at[idx, 'src_lines'] = [clean_text_for_output(ori_content_lines[i]) for i in match_indices]
                 last_idx = i + 1
                 break
         else:  # If no match is found
