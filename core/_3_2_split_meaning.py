@@ -86,7 +86,7 @@ def batch_split_sentences(sentences_to_split, word_limit=20, retry_attempt=0):
                 return {"status": "error", "message": f"Missing ID {idx_str} in response"}
             if "[br]" not in response_data[idx_str].get("split", ""):
                 # We don't necessarily error out if ONE fails, but here we want to ensure splitting happened
-                pass 
+                pass
         return {"status": "success", "message": "Batch split completed"}
 
     try:
@@ -100,9 +100,12 @@ def batch_split_sentences(sentences_to_split, word_limit=20, retry_attempt=0):
         idx_str = str(item['index'])
         if idx_str in response_data:
             best_split_raw = response_data[idx_str]["split"]
+            # Get speaker assignments array, fallback to original speaker_id
+            original_speaker = item.get('speaker_id')
+            speaker_assignments = response_data[idx_str].get("speaker_assignments")
             sentence = item['sentence']
             split_points = find_split_positions(sentence, best_split_raw)
-            
+
             best_split = sentence
             # split the sentence based on the split points
             for i, split_point in enumerate(split_points):
@@ -113,16 +116,31 @@ def batch_split_sentences(sentences_to_split, word_limit=20, retry_attempt=0):
                     last_part = parts[-1]
                     parts[-1] = last_part[:split_point - split_points[i-1]] + '\n' + last_part[split_point - split_points[i-1]:]
                     best_split = '\n'.join(parts)
-            
-            results[item['index']] = best_split
-            
+
+            # Split into lines to count parts
+            split_lines = [line.strip() for line in best_split.split('\n') if line.strip()]
+            num_parts = len(split_lines)
+
+            # Validate speaker_assignments length matches split parts
+            if speaker_assignments and len(speaker_assignments) == num_parts:
+                validated_speakers = speaker_assignments
+            else:
+                # Fallback: all parts use original speaker
+                validated_speakers = [original_speaker] * num_parts if original_speaker else [None] * num_parts
+
+            results[item['index']] = {
+                'split': best_split,
+                'speakers': validated_speakers  # Array of speakers for each part
+            }
+
             table = Table(title=f"Sentence {item['index']} Split")
             table.add_column("Type", style="cyan")
             table.add_column("Sentence")
             table.add_row("Original", sentence, style="yellow")
             table.add_row("Split", best_split.replace('\n', ' ||'), style="yellow")
+            table.add_row("Speakers", " || ".join(str(s) for s in validated_speakers), style="cyan")
             console.print(table)
-            
+
     return results
 
 import pandas as pd
@@ -156,33 +174,42 @@ def parallel_split_sentences(sentences_data, max_length, max_workers, nlp, retry
     for i in range(0, len(to_split), batch_size):
         batch = to_split[i:i + batch_size]
         batch_results = batch_split_sentences(batch, max_length, retry_attempt)
-        for idx, split_result in batch_results.items():
-            if split_result:
+        for idx, result_data in batch_results.items():
+            if result_data and result_data.get('split'):
+                split_result = result_data['split']
                 split_lines = [line.strip() for line in split_result.strip().split('\n') if line.strip()]
                 original_item = next(x for x in to_split if x['index'] == idx)
-                speaker_id = original_item['speaker_id']
+                # Get speakers array (one per part), fallback to original speaker for all parts
+                speakers_array = result_data.get('speakers')
+                original_speaker = original_item['speaker_id']
                 start_time = original_item['start']
                 end_time = original_item['end']
-                
+
+                # Ensure speakers array matches split lines count
+                if speakers_array and len(speakers_array) == len(split_lines):
+                    speakers = speakers_array
+                else:
+                    speakers = [original_speaker] * len(split_lines)
+
                 if len(split_lines) <= 1:
                     new_sentences_data[idx] = [{
-                        'text': split_lines[0] if split_lines else original_item['sentence'], 
-                        'start': start_time, 
-                        'end': end_time, 
-                        'speaker_id': speaker_id
+                        'text': split_lines[0] if split_lines else original_item['sentence'],
+                        'start': start_time,
+                        'end': end_time,
+                        'speaker_id': speakers[0] if speakers else original_speaker
                     }]
                 else:
                     total_len = sum(len(line) for line in split_lines)
                     current_start = start_time
                     duration = end_time - start_time
                     new_sentences_data[idx] = []
-                    for line in split_lines:
+                    for line_idx, line in enumerate(split_lines):
                         line_duration = (len(line) / total_len) * duration if total_len > 0 else 0
                         new_sentences_data[idx].append({
                             'text': line,
                             'start': round(current_start, 3),
                             'end': round(current_start + line_duration, 3),
-                            'speaker_id': speaker_id
+                            'speaker_id': speakers[line_idx] if line_idx < len(speakers) else original_speaker
                         })
                         current_start += line_duration
     

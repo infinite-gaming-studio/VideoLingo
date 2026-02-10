@@ -45,14 +45,15 @@ Note: Start you answer with ```json and end with ```, do not add any other text.
 
 def get_batch_split_prompt(sentences_list, word_limit=20):
     """
-    sentences_list: list of dicts {"index": int, "sentence": str, "num_parts": int}
+    sentences_list: list of dicts {"index": int, "sentence": str, "num_parts": int, "speaker_id": any}
     """
     language = load_key("whisper.detected_language")
-    
+
     # Format the input sentences for the prompt
     input_text = ""
     for item in sentences_list:
-        input_text += f"ID: {item['index']}\nText: {item['sentence']}\nParts: {item['num_parts']}\n---\n"
+        speaker_info = f"Speaker: {item['speaker_id']}\n" if item.get('speaker_id') is not None else ""
+        input_text += f"ID: {item['index']}\n{speaker_info}Text: {item['sentence']}\nParts: {item['num_parts']}\n---\n"
 
     batch_split_prompt = f"""
 ## Role
@@ -65,26 +66,37 @@ Split several subtitle segments. For each segment, split it into the specified n
 2. MOST IMPORTANT: Keep parts roughly equal in length (minimum 3 words each)
 3. Split at natural points like punctuation marks or conjunctions
 4. If provided text is repeated words, simply split at the middle of the repeated words.
+5. Note the speaker information if provided (for reference only, does not affect splitting)
 
 ## Input Segments
 {input_text}
 
 ## Output Requirements
-Output a JSON object where keys are the IDs of the segments. For each ID, provide:
+Output a JSON object where keys are the numeric IDs of the segments (same as the input ID field). For each ID, provide:
 1. analysis: Brief description of splitting logic
 2. split: The result text with [br] tags at split positions
+3. speaker_assignments: Array of speaker IDs for each split part (same length as split parts). If the entire text belongs to the input speaker, repeat the speaker_id for each part.
 
 ## Output in only JSON format and no other text
 ```json
 {{
-    "ID_1": {{
+    "1": {{
         "analysis": "...",
-        "split": "part1 [br] part2"
+        "split": "part1 [br] part2",
+        "speaker_assignments": ["SPEAKER_00", "SPEAKER_00"]
     }},
-    ...
+    "2": {{
+        "analysis": "Text contains dialogue between two speakers",
+        "split": "Speaker A says hello [br] Speaker B replies hi",
+        "speaker_assignments": ["SPEAKER_00", "SPEAKER_01"]
+    }}
 }}
 ```
 
+IMPORTANT: 
+- Use the numeric ID directly as the key (e.g., "1", "2"), NOT "ID_1" or "ID_2" format.
+- speaker_assignments array length must match the number of split parts.
+- If text contains multiple speakers' dialogue, analyze and assign correct speaker to each part.
 Note: Start your answer with ```json and end with ```, do not add any other text.
 """.strip()
     return batch_split_prompt
@@ -445,17 +457,18 @@ You are a professional subtitle editor. Your task is to shorten multiple subtitl
 {rule}
 
 ## Output Requirements
-Output a JSON object where keys are the IDs. Each value should be the optimized and shortened subtitle.
+Output a JSON object where keys are the numeric IDs of the subtitles. Each value should be the optimized and shortened subtitle text.
 
 ## Output in only JSON format and no other text
 ```json
 {{
-    "ID_1": "shortened text 1",
-    "ID_2": "shortened text 2",
+    "1": "shortened text 1",
+    "2": "shortened text 2",
     ...
 }}
 ```
 
+IMPORTANT: Use the numeric ID directly as the key (e.g., "1", "2"), NOT "ID_1" or "ID_2" format.
 Note: Start your answer with ```json and end with ```, do not add any other text.
 """.strip()
     return trim_prompt
