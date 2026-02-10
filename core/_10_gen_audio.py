@@ -165,6 +165,7 @@ def merge_chunks(tasks_df: pd.DataFrame) -> pd.DataFrame:
     accept = load_key("speed_factor.accept")
     min_speed = load_key("speed_factor.min")
     chunk_start = 0
+    cumulative_shift = 0.0  # 累积时间偏移
     
     tasks_df['new_sub_times'] = None
     
@@ -173,9 +174,9 @@ def merge_chunks(tasks_df: pd.DataFrame) -> pd.DataFrame:
             chunk_df = tasks_df.iloc[chunk_start:index+1].reset_index(drop=True)
             speed_factor, keep_gaps = process_chunk(chunk_df, accept, min_speed)
             
-            # 🎯 Step1: Start processing new timeline
-            chunk_start_time = parse_df_srt_time(chunk_df.iloc[0]['start_time'])
-            chunk_end_time = parse_df_srt_time(chunk_df.iloc[-1]['end_time']) + chunk_df.iloc[-1]['tolerance'] # 加上tolerance才是这一块的结束
+            # 🎯 Step1: Start processing new timeline (apply cumulative shift)
+            chunk_start_time = parse_df_srt_time(chunk_df.iloc[0]['start_time']) + cumulative_shift
+            chunk_end_time = parse_df_srt_time(chunk_df.iloc[-1]['end_time']) + chunk_df.iloc[-1]['tolerance'] + cumulative_shift
             cur_time = chunk_start_time
             for i, row in chunk_df.iterrows():
                 # If i is not 0, which is not the first row of the chunk, cur_time needs to be added with the gap of the previous row, remember to divide by speed_factor
@@ -249,7 +250,10 @@ def merge_chunks(tasks_df: pd.DataFrame) -> pd.DataFrame:
                     
                     # Check again after retry
                     if cur_time > chunk_end_time + 2.0:
-                        raise Exception(f"Chunk {chunk_start} to {index} still exceeds the chunk end time {chunk_end_time:.2f} seconds with current time {cur_time:.2f} seconds after retry")
+                        # 🎯 方案2: 时间轴自适应 - 将超时部分累积到后续时间轴
+                        chunk_shift = cur_time - chunk_end_time
+                        cumulative_shift += chunk_shift
+                        rprint(f"[yellow]🕐 Chunk {chunk_start} to {index} still exceeds by {chunk_shift:.2f}s after retry. Shifting timeline by {cumulative_shift:.2f}s for subsequent chunks.[/yellow]")
             chunk_start = index+1
     
     rprint("[bold green]✅ Audio chunks processing completed![/bold green]")
