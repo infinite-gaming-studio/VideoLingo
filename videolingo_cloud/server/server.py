@@ -185,7 +185,7 @@ def get_or_load_diarize_model():
             diarize_model = whisperx.diarize.DiarizationPipeline(
                 model_name="pyannote/speaker-diarization-3.1",
                 device=device,
-                use_auth_token=hf_token
+                token=hf_token
             )
             diarize_model_cache['diarize'] = diarize_model
             vprint(f"✅ Diarization model loaded")
