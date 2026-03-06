@@ -40,6 +40,9 @@ def valid_translate_result(result: dict, expected_ids: set, required_sub_keys: l
         for sub_key in required_sub_keys:
             if sub_key not in item:
                 return {"status": "error", "message": f"Missing '{sub_key}' in item {key}"}
+            # First-principle fix: Check for empty translation content
+            if not item[sub_key] or not str(item[sub_key]).strip():
+                return {"status": "error", "message": f"Empty '{sub_key}' in item {key}"}
 
     return {"status": "success", "message": "Translation completed"}
 

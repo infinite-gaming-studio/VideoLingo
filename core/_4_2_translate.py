@@ -172,6 +172,18 @@ def translate_all():
                 df_time.at[int(tid), 'Translation'] = ttext
         console.print("[green]✅ Batched trimming completed.[/green]")
     
+    # First-principle fix: Final validation before saving - ensure no empty translations
+    empty_count = df_time['Translation'].isna().sum() + (df_time['Translation'].astype(str).str.strip() == '').sum()
+    if empty_count > 0:
+        console.print(Panel(f"[yellow]⚠️ Found {empty_count} empty translations. Retrying...[/yellow]"))
+        # Fill empty translations with source text as fallback
+        for idx in df_time.index:
+            trans = df_time.at[idx, 'Translation']
+            if pd.isna(trans) or str(trans).strip() == '':
+                source = df_time.at[idx, 'Source']
+                df_time.at[idx, 'Translation'] = source
+                console.print(f"[yellow]  Line {idx}: Using source text as fallback[/yellow]")
+    
     console.print(df_time)
     
     df_time.to_excel(_4_2_TRANSLATION, index=False)

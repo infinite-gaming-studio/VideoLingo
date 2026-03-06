@@ -73,13 +73,19 @@ def process_srt():
             end_time = datetime.datetime.strptime(ts_end, '%H:%M:%S,%f').time()
             
             duration = row['duration']
-            text = str(row['Translation']).strip()
+            # Handle NaN values: check if Translation is NaN before converting to string
+            translation_val = row['Translation']
+            if pd.isna(translation_val):
+                rprint(Panel(f"Row {i} has empty Translation, skipping.", title="Warning", border_style="yellow"))
+                continue
+            text = str(translation_val).strip()
             # Remove content within parentheses
             text = re.sub(r'\([^)]*\)', '', text).strip()
             text = re.sub(r'（[^）]*）', '', text).strip()
             text = text.replace('-', '')
             
-            origin = str(row['Source']).strip()
+            origin_val = row['Source']
+            origin = str(origin_val).strip() if pd.notna(origin_val) else ''
             speaker_id = row.get('speaker_id', None)
 
         except Exception as e:

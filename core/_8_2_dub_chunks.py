@@ -172,6 +172,9 @@ def gen_dub_chunks():
         """clean space, punctuation and speaker labels"""
         if not text or not isinstance(text, str):
             return ''
+        # Handle 'nan' string that comes from str(pd.NA) or str(float('nan'))
+        if text == 'nan' or text.strip() == 'nan':
+            return ''
         # First remove SPEAKER_XX labels (e.g., SPEAKER_01, SPEAKER_00)
         text = re.sub(r'SPEAKER_\d+', '', text)
         # Then remove punctuation and whitespace

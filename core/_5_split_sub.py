@@ -71,11 +71,14 @@ def split_align_subs(src_lines: List[str], tr_lines: List[str], speaker_ids: Lis
     subtitle_set = load_key("subtitle")
     MAX_SUB_LENGTH = subtitle_set["max_length"]
     TARGET_SUB_MULTIPLIER = subtitle_set["target_multiplier"]
-    remerged_tr_lines = tr_lines.copy()
+    # Handle NaN values: convert to empty string instead of 'nan'
+    remerged_tr_lines = [str(tr) if pd.notna(tr) else '' for tr in tr_lines]
     
     to_split = []
     for i, (src, tr) in enumerate(zip(src_lines, tr_lines)):
-        src, tr = str(src), str(tr)
+        # Handle NaN values: convert to empty string instead of 'nan'
+        src = str(src) if pd.notna(src) else ''
+        tr = str(tr) if pd.notna(tr) else ''
         if len(src) > MAX_SUB_LENGTH or calc_len(tr) * TARGET_SUB_MULTIPLIER > MAX_SUB_LENGTH:
             to_split.append(i)
             table = Table(title=f"📏 Line {i} needs to be split")
@@ -96,9 +99,11 @@ def split_align_subs(src_lines: List[str], tr_lines: List[str], speaker_ids: Lis
         except Exception as e:
             console.print(f"[yellow]⚠️ Align failed for line {i}, using original: {e}[/yellow]")
             # Fallback: use original text without splitting
-            src_lines[i] = [src_lines[i]]
-            tr_lines[i] = [tr_lines[i]]
-            remerged_tr_lines[i] = tr_lines[i]
+            src_val = str(src_lines[i]) if pd.notna(src_lines[i]) else ''
+            tr_val = str(tr_lines[i]) if pd.notna(tr_lines[i]) else ''
+            src_lines[i] = [src_val]
+            tr_lines[i] = [tr_val]
+            remerged_tr_lines[i] = tr_val
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=load_key("max_workers")) as executor:
         executor.map(process, to_split)
