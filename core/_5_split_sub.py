@@ -45,6 +45,9 @@ def align_subs(src_sub: str, tr_sub: str, src_part: str) -> Tuple[List[str], Lis
             key = f'target_part_{i+1}'
             if key not in item:
                 return {"status": "error", "message": f"Missing required key: `{key}`"}
+            # Check that the value is a string, not a dict or other type
+            if not isinstance(item[key], str):
+                return {"status": "error", "message": f"`{key}` must be a string, got {type(item[key]).__name__}: {item[key]}"}
         return {"status": "success", "message": "Align completed"}
     parsed = ask_gpt(align_prompt, resp_type='json', valid_def=valid_align, log_title='align_subs')
     align_data = parsed['align']
