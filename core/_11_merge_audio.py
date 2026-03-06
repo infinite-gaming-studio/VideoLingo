@@ -88,11 +88,53 @@ def process_audio_segment_optimized(args):
             console.print(f"[red]❌ Error: Failed to load {audio_file}: {e2}[/red]")
             return audio_file, None
 
+def compress_large_gaps(new_sub_times, max_gap_sec=1.0, min_gap_sec=0.1):
+    """
+    Compress large gaps between audio segments to improve pacing
+    while maintaining natural breathing room
+    """
+    if len(new_sub_times) < 2:
+        return new_sub_times
+    
+    compressed_times = [new_sub_times[0]]
+    total_compression = 0.0
+    
+    for i in range(1, len(new_sub_times)):
+        prev_end = new_sub_times[i-1][1]
+        curr_start, curr_end = new_sub_times[i]
+        gap = curr_start - prev_end
+        
+        if gap > max_gap_sec:
+            # Compress large gaps
+            compressed_gap = min_gap_sec + (gap - min_gap_sec) * 0.5  # Keep 50% of excess gap
+            compression = gap - compressed_gap
+            total_compression += compression
+            
+            # Adjust current segment start time
+            new_start = prev_end + compressed_gap
+            time_shift = new_start - curr_start
+            compressed_times.append([new_start, curr_end + time_shift])
+            
+            if i % 10 == 0:  # Log every 10th compression
+                console.print(f"[dim]Compressed gap {i}: {gap:.2f}s → {compressed_gap:.2f}s[/dim]")
+        else:
+            compressed_times.append([curr_start, curr_end])
+    
+    if total_compression > 0:
+        console.print(f"[cyan]📉 Total gap compression: {total_compression:.2f}s[/cyan]")
+    
+    return compressed_times
+
+
 def merge_audio_segments(audios, new_sub_times, sample_rate):
     """Merge audio segments with parallel processing for better performance"""
     import os
     cpu_count = os.cpu_count() or 4
     max_workers = min(cpu_count, 8)  # Limit max parallel workers
+    
+    # 🎯 NEW: Compress large gaps for better pacing
+    original_times = new_sub_times.copy()
+    new_sub_times = compress_large_gaps(new_sub_times)
     
     console.print(f"[bold blue]🚀 Processing {len(audios)} audio segments with {max_workers} parallel workers...[/bold blue]")
     

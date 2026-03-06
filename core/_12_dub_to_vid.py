@@ -1,3 +1,4 @@
+import os
 import platform
 import subprocess
 
@@ -6,6 +7,7 @@ import numpy as np
 from rich.console import Console
 
 from core._1_ytdlp import find_video_files
+from core._12_5_video_compensate import compensate_video_timing, cleanup_compensation_file
 from core.asr_backend.audio_preprocess import normalize_audio_volume
 from core.utils import *
 from core.utils.models import *
@@ -37,6 +39,13 @@ def merge_video_audio():
     VIDEO_FILE = find_video_files()
     background_file = _BACKGROUND_AUDIO_FILE
 
+    # 🎯 NEW: Apply video timing compensation if needed
+    compensation_file = 'output/audio/video_compensation.json'
+    if os.path.exists(compensation_file):
+        console.print("[bold blue]🎬 Applying video timing compensation...[/bold blue]")
+        VIDEO_FILE = compensate_video_timing(VIDEO_FILE)
+        cleanup_compensation_file()
+    
     # Normalize dub audio
     normalized_dub_audio = 'output/normalized_dub.wav'
     normalize_audio_volume(DUB_AUDIO, normalized_dub_audio)

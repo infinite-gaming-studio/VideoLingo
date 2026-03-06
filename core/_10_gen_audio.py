@@ -159,102 +159,125 @@ def process_chunk(chunk_df: pd.DataFrame, accept: float, min_speed: float) -> tu
         
     return round(speed_factor, 3), keep_gaps
 
+def compress_gaps(chunk_df: pd.DataFrame, overflow: float) -> float:
+    """Compress gaps within chunk to absorb overflow time. Returns actually saved time."""
+    if overflow <= 0 or len(chunk_df) <= 1:
+        return 0.0
+    
+    # Calculate total compressible gap (exclude last gap)
+    gaps = chunk_df['gap'].tolist()
+    total_gap = sum(gaps[:-1]) if len(gaps) > 1 else 0
+    
+    if total_gap < 0.1:  # No meaningful gap to compress
+        return 0.0
+    
+    # Calculate compression ratio (keep at least 30% of original gap)
+    max_compressible = total_gap * 0.7  # Can compress up to 70%
+    actual_compress = min(overflow, max_compressible)
+    
+    if actual_compress <= 0:
+        return 0.0
+    
+    # Apply proportional compression to all gaps
+    compression_ratio = 1 - (actual_compress / total_gap)
+    chunk_df['gap'] = chunk_df['gap'] * compression_ratio
+    
+    rprint(f"[cyan]📉 Compressed gaps by {(1-compression_ratio)*100:.1f}%, saved {actual_compress:.3f}s[/cyan]")
+    return actual_compress
+
+
 def merge_chunks(tasks_df: pd.DataFrame) -> pd.DataFrame:
-    """Merge audio chunks and adjust timeline"""
+    """Merge audio chunks without truncation - use gap compression and video compensation instead"""
     rprint("[bold blue]🔄 Starting audio chunks processing...[/bold blue]")
     accept = load_key("speed_factor.accept")
     min_speed = load_key("speed_factor.min")
     chunk_start = 0
-    cumulative_shift = 0.0  # 累积时间偏移
     
     tasks_df['new_sub_times'] = None
+    compensation_map = []  # Track video compensation needs
     
     for index, row in tasks_df.iterrows():
         if row['cut_off'] == 1:
             chunk_df = tasks_df.iloc[chunk_start:index+1].reset_index(drop=True)
             speed_factor, keep_gaps = process_chunk(chunk_df, accept, min_speed)
             
-            # 🎯 Step1: Start processing new timeline (apply cumulative shift)
-            chunk_start_time = parse_df_srt_time(chunk_df.iloc[0]['start_time']) + cumulative_shift
-            chunk_end_time = parse_df_srt_time(chunk_df.iloc[-1]['end_time']) + chunk_df.iloc[-1]['tolerance'] + cumulative_shift
+            # Calculate time targets
+            chunk_start_time = parse_df_srt_time(chunk_df.iloc[0]['start_time'])
+            chunk_end_time = parse_df_srt_time(chunk_df.iloc[-1]['end_time']) + chunk_df.iloc[-1]['tolerance']
+            target_duration = chunk_end_time - chunk_start_time
+            
+            # 🎯 NEW: Limit voice speed to 1.15x for naturalness
+            max_voice_speed = 1.15
+            actual_speed = min(speed_factor, max_voice_speed)
+            
             cur_time = chunk_start_time
+            total_audio_duration = 0.0
+            
             for i, row in chunk_df.iterrows():
-                # If i is not 0, which is not the first row of the chunk, cur_time needs to be added with the gap of the previous row, remember to divide by speed_factor
                 if i != 0 and keep_gaps:
-                    cur_time += chunk_df.iloc[i-1]['gap']/speed_factor
+                    cur_time += chunk_df.iloc[i-1]['gap'] / actual_speed
+                
                 new_sub_times = []
                 number = row['number']
                 lines = eval(row['lines']) if isinstance(row['lines'], str) else row['lines']
+                
                 for line_index, line in enumerate(lines):
-                    # 🔄 Step2: Start speed change and save as OUTPUT_FILE_TEMPLATE
                     temp_file = TEMP_FILE_TEMPLATE.format(f"{number}_{line_index}")
                     output_file = OUTPUT_FILE_TEMPLATE.format(f"{number}_{line_index}")
-                    adjust_audio_speed(temp_file, output_file, speed_factor)
+                    adjust_audio_speed(temp_file, output_file, actual_speed)
                     ad_dur = get_audio_duration(output_file)
-                    new_sub_times.append([cur_time, cur_time+ad_dur])
+                    new_sub_times.append([cur_time, cur_time + ad_dur])
                     cur_time += ad_dur
-                # 🔄 Step3: Find corresponding main DataFrame index and update new_sub_times
+                    total_audio_duration += ad_dur
+                
                 main_df_idx = tasks_df[tasks_df['number'] == row['number']].index[0]
                 tasks_df.at[main_df_idx, 'new_sub_times'] = new_sub_times
-                # 🎯 Step4: Choose emoji based on speed_factor and accept comparison
-                emoji = "⚡" if speed_factor <= accept else "⚠️"
-                rprint(f"[cyan]{emoji} Processed chunk {chunk_start} to {index} with speed factor {speed_factor}[/cyan]")
-            # 🔄 Step5: Check if the last row exceeds the range
-            if cur_time > chunk_end_time:
-                time_diff = cur_time - chunk_end_time
-                if time_diff <= 2.0:  # If exceeding time is within 2.0 seconds, truncate the last audio
-                    rprint(f"[yellow]⚠️ Chunk {chunk_start} to {index} exceeds by {time_diff:.3f}s, truncating last audio[/yellow]")
-                    # Get the last audio file
-                    last_number = tasks_df.iloc[index]['number']
-                    last_lines = eval(tasks_df.iloc[index]['lines']) if isinstance(tasks_df.iloc[index]['lines'], str) else tasks_df.iloc[index]['lines']
-                    last_line_index = len(last_lines) - 1
-                    last_file = OUTPUT_FILE_TEMPLATE.format(f"{last_number}_{last_line_index}")
+            
+            # 🎯 NEW: Check overflow and apply gap compression
+            overflow = cur_time - chunk_end_time
+            
+            if overflow > 0:
+                rprint(f"[yellow]⚠️ Chunk {chunk_start} to {index} would exceed by {overflow:.3f}s[/yellow]")
+                
+                # Strategy 1: Compress gaps
+                saved_time = compress_gaps(chunk_df, overflow)
+                overflow -= saved_time
+                
+                # Strategy 2: If still overflow, mark for video compensation
+                if overflow > 0.1:  # More than 100ms needs compensation
+                    # When audio is longer than target, video needs to SLOW DOWN
+                    # to match the longer audio duration
+                    # target_duration = original_duration (chunk duration)
+                    # audio_duration = target_duration + overflow
+                    # speed = target_duration / audio_duration
+                    audio_duration = target_duration + overflow
+                    video_speed = target_duration / audio_duration
+                    video_speed = max(0.92, min(1.0, video_speed))  # Limit to 0.92-1.0
                     
-                    # Calculate the duration to keep
-                    audio = AudioSegment.from_wav(last_file)
-                    original_duration = len(audio) / 1000  # Convert to seconds
-                    new_duration = max(0.1, original_duration - time_diff)  # Ensure at least 0.1s
-                    trimmed_audio = audio[:(new_duration * 1000)]  # pydub uses milliseconds
-                    trimmed_audio.export(last_file, format="wav")
+                    compensation_map.append({
+                        'chunk_start_idx': chunk_start,
+                        'chunk_end_idx': index,
+                        'video_speed': video_speed,
+                        'compensation_time': overflow,
+                        'chunk_start_time': chunk_start_time,
+                        'chunk_end_time': chunk_end_time
+                    })
                     
-                    # Update the last timestamp
-                    last_times = tasks_df.at[index, 'new_sub_times']
-                    last_times[-1][1] = chunk_end_time
-                    tasks_df.at[index, 'new_sub_times'] = last_times
+                    rprint(f"[cyan]🎬 Chunk {chunk_start}-{index} marked for video compensation: speed={video_speed:.3f}, time={overflow:.3f}s[/cyan]")
                 else:
-                    # Try to reprocess with a faster speed factor
-                    rprint(f"[yellow]⚠️ Chunk {chunk_start} to {index} exceeds by {time_diff:.3f}s, retrying with faster speed...[/yellow]")
-                    # Calculate required speed factor to fit within the chunk
-                    required_speed = cur_time / chunk_end_time * speed_factor * 1.05  # Add 5% margin
-                    required_speed = min(required_speed, accept)  # Cap at accept limit
-                    
-                    # Reprocess the entire chunk with faster speed
-                    cur_time = chunk_start_time
-                    for i, row in chunk_df.iterrows():
-                        if i != 0 and keep_gaps:
-                            cur_time += chunk_df.iloc[i-1]['gap']/required_speed
-                        new_sub_times = []
-                        number = row['number']
-                        lines = eval(row['lines']) if isinstance(row['lines'], str) else row['lines']
-                        for line_index, line in enumerate(lines):
-                            temp_file = TEMP_FILE_TEMPLATE.format(f"{number}_{line_index}")
-                            output_file = OUTPUT_FILE_TEMPLATE.format(f"{number}_{line_index}")
-                            adjust_audio_speed(temp_file, output_file, required_speed)
-                            ad_dur = get_audio_duration(output_file)
-                            new_sub_times.append([cur_time, cur_time+ad_dur])
-                            cur_time += ad_dur
-                        main_df_idx = tasks_df[tasks_df['number'] == row['number']].index[0]
-                        tasks_df.at[main_df_idx, 'new_sub_times'] = new_sub_times
-                    
-                    rprint(f"[green]✅ Retried chunk {chunk_start} to {index} with speed factor {required_speed:.3f}[/green]")
-                    
-                    # Check again after retry
-                    if cur_time > chunk_end_time + 2.0:
-                        # 🎯 方案2: 时间轴自适应 - 将超时部分累积到后续时间轴
-                        chunk_shift = cur_time - chunk_end_time
-                        cumulative_shift += chunk_shift
-                        rprint(f"[yellow]🕐 Chunk {chunk_start} to {index} still exceeds by {chunk_shift:.2f}s after retry. Shifting timeline by {cumulative_shift:.2f}s for subsequent chunks.[/yellow]")
-            chunk_start = index+1
+                    rprint(f"[green]✅ Chunk {chunk_start} to {index} gap compression resolved overflow[/green]")
+            
+            emoji = "⚡" if actual_speed <= accept else "🎯"
+            rprint(f"[cyan]{emoji} Processed chunk {chunk_start} to {index} with voice speed {actual_speed:.2f}x[/cyan]")
+            
+            chunk_start = index + 1
+    
+    # Save compensation map for video processing
+    if compensation_map:
+        import json
+        with open('output/audio/video_compensation.json', 'w', encoding='utf-8') as f:
+            json.dump(compensation_map, f, indent=2)
+        rprint(f"[bold yellow]📝 Saved {len(compensation_map)} video compensation requests[/bold yellow]")
     
     rprint("[bold green]✅ Audio chunks processing completed![/bold green]")
     return tasks_df
