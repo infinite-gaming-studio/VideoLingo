@@ -10,6 +10,49 @@ from core.utils import *
 from translations.translations import translate as t
 
 OUTPUT_DIR = "output"
+TEMP_DIR = "temp"
+MODEL_CACHE_DIR = "_model_cache"
+
+def clear_all_cache():
+    """Clear all cache directories including output, temp, and gpt_log"""
+    # Clear output directory
+    if os.path.exists(OUTPUT_DIR):
+        try:
+            shutil.rmtree(OUTPUT_DIR)
+        except OSError:
+            # If directory is busy, clear contents instead
+            for item in os.listdir(OUTPUT_DIR):
+                item_path = os.path.join(OUTPUT_DIR, item)
+                try:
+                    if os.path.isfile(item_path):
+                        os.remove(item_path)
+                    elif os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                except Exception:
+                    pass
+    
+    # Clear temp directory
+    if os.path.exists(TEMP_DIR):
+        try:
+            shutil.rmtree(TEMP_DIR)
+        except OSError:
+            for item in os.listdir(TEMP_DIR):
+                item_path = os.path.join(TEMP_DIR, item)
+                try:
+                    if os.path.isfile(item_path):
+                        os.remove(item_path)
+                    elif os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                except Exception:
+                    pass
+    
+    # Clear model cache audio cache (but keep models)
+    audio_cache_dir = os.path.join(MODEL_CACHE_DIR, "audio_cache")
+    if os.path.exists(audio_cache_dir):
+        try:
+            shutil.rmtree(audio_cache_dir)
+        except Exception:
+            pass
 
 def download_video_section():
     st.header(t("a. Download or Upload Video"))
@@ -19,9 +62,9 @@ def download_video_section():
             st.video(video_file)
             if st.button(t("Delete and Reselect"), key="delete_video_button"):
                 os.remove(video_file)
-                if os.path.exists(OUTPUT_DIR):
-                    shutil.rmtree(OUTPUT_DIR)
-                sleep(1)
+                clear_all_cache()
+                st.success("Video and all cache cleared successfully!")
+                sleep(0.5)
                 st.rerun()
             return True
         except:
