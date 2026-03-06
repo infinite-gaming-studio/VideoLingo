@@ -181,6 +181,13 @@ def get_or_load_diarize_model():
         
         hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
         
+        if not hf_token:
+            raise ValueError("HF_TOKEN or HUGGING_FACE_HUB_TOKEN environment variable not set. "
+                           "Please set it to access pyannote models. "
+                           "Get your token from https://huggingface.co/settings/tokens")
+        
+        vprint(f"🔑 HF Token found: {'Yes (masked)' if hf_token else 'No'}")
+        
         try:
             diarize_model = whisperx.diarize.DiarizationPipeline(
                 model_name="pyannote/speaker-diarization-3.1",
