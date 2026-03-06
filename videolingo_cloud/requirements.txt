@@ -67,6 +67,10 @@ python-multipart==0.0.6
 # Note: Increases GPU memory usage significantly
 # pyannote.audio==3.1.1
 
+# HuggingFace Hub - Required for authenticated model downloads
+# Already included as dependency of transformers, but listed here for clarity
+huggingface_hub>=0.16.0
+
 # ======================== Utilities ========================
 rich
 # NumPy - Numerical computing

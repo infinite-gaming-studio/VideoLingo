@@ -34,6 +34,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 import torch
+from huggingface_hub import login
 
 # Fix PyTorch 2.6+ weights_only issue for pyannote models
 # This is needed because pyannote.audio uses omegaconf which is not in default safe globals
@@ -187,6 +188,13 @@ def get_or_load_diarize_model():
                            "Get your token from https://huggingface.co/settings/tokens")
         
         vprint(f"🔑 HF Token found: {'Yes (masked)' if hf_token else 'No'}")
+        
+        # Authenticate with HuggingFace hub globally so all model downloads use the token
+        try:
+            login(token=hf_token)
+            vprint(f"🔓 HuggingFace authentication successful")
+        except Exception as e:
+            vprint(f"⚠️ HuggingFace login warning: {e}")
         
         try:
             diarize_model = whisperx.diarize.DiarizationPipeline(
